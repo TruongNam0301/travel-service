@@ -1,0 +1,7 @@
+{
+  "plugins": ["@dwmt/commitlint-plugin-jira-type"],
+  "extends": ["@dwmt/commitlint-config-jira-type"],
+  "rules": {
+    "jira-type-project-key-enum": [2, "always", ["TA"]]
+  }
+}

@@ -1,0 +1,8 @@
+# yarn mount-env  
+echo "TICKET Checking code style ..."
+yarn lint-staged
+
+echo "Travel Service Build with local mode ..."
+yarn build
+
+echo "Travel Service Success!, You can push now!, We will see commit message of you!"
