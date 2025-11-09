@@ -6,7 +6,7 @@ export interface PaginationOptions {
   page: number;
   limit: number;
   sortBy?: string;
-  sortOrder?: 'ASC' | 'DESC';
+  sortOrder?: "ASC" | "DESC";
 }
 
 export interface PaginatedResult<T> {
@@ -25,5 +25,5 @@ export interface PaginationQuery {
   page?: string;
   limit?: string;
   sortBy?: string;
-  sortOrder?: 'ASC' | 'DESC';
+  sortOrder?: "ASC" | "DESC";
 }

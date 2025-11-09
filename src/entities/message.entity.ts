@@ -6,44 +6,44 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
-} from 'typeorm';
-import { Conversation } from './conversation.entity';
+} from "typeorm";
+import { Conversation } from "./conversation.entity";
 
 export enum MessageRole {
-  USER = 'user',
-  ASSISTANT = 'assistant',
+  USER = "user",
+  ASSISTANT = "assistant",
 }
 
-@Entity('messages')
-@Index(['conversationId', 'createdAt'])
+@Entity("messages")
+@Index(["conversationId", "createdAt"])
 export class Message {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ name: 'conversation_id', type: 'uuid' })
+  @Column({ name: "conversation_id", type: "uuid" })
   conversationId: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: "varchar", length: 20 })
   role: MessageRole;
 
-  @Column({ type: 'text' })
+  @Column({ type: "text" })
   content: string;
 
   // Soft delete fields
-  @Column({ name: 'is_deleted', type: 'boolean', default: false })
+  @Column({ name: "is_deleted", type: "boolean", default: false })
   isDeleted: boolean;
 
-  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  @Column({ name: "deleted_at", type: "timestamptz", nullable: true })
   deletedAt?: Date;
 
-  @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
+  @Column({ name: "deleted_by", type: "uuid", nullable: true })
   deletedBy?: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt: Date;
 
   // Relations
   @ManyToOne(() => Conversation, (conversation) => conversation.messages)
-  @JoinColumn({ name: 'conversation_id' })
+  @JoinColumn({ name: "conversation_id" })
   conversation: Conversation;
 }

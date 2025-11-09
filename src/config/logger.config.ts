@@ -1,6 +1,6 @@
-import { Params } from 'nestjs-pino';
-import { v4 as uuidv4 } from 'uuid';
-import { Request, Response } from 'express';
+import { Params } from "nestjs-pino";
+import { v4 as uuidv4 } from "uuid";
+import { Request, Response } from "express";
 
 interface RequestWithUser {
   user?: {
@@ -15,26 +15,26 @@ interface RequestWithUser {
 }
 
 export const getLoggerConfig = (): Params => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = process.env.NODE_ENV === "development";
 
   return {
     pinoHttp: {
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env.LOG_LEVEL || "info",
       transport: isDevelopment
         ? {
-            target: 'pino-pretty',
+            target: "pino-pretty",
             options: {
               colorize: true,
               singleLine: true,
-              translateTime: 'HH:MM:ss Z',
-              ignore: 'pid,hostname',
+              translateTime: "HH:MM:ss Z",
+              ignore: "pid,hostname",
             },
           }
         : undefined,
       autoLogging: true,
       // Generate unique request ID for tracing
       genReqId: (req: Request) => {
-        return (req.headers['x-request-id'] as string) || uuidv4();
+        return (req.headers["x-request-id"] as string) || uuidv4();
       },
       // Custom properties per request
       customProps: (req: Request) => {
@@ -64,12 +64,12 @@ export const getLoggerConfig = (): Params => {
       // Redact sensitive data
       redact: {
         paths: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.body.password',
-          'req.body.passwordConfirm',
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "req.body.password",
+          "req.body.passwordConfirm",
         ],
-        censor: '[REDACTED]',
+        censor: "[REDACTED]",
       },
     },
   };

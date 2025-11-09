@@ -1,0 +1,71 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from "@nestjs/common";
+import { PlansService } from "../services/plans.service";
+import { CreatePlanDto } from "../dto/plans/create-plan.dto";
+import { UpdatePlanDto } from "../dto/plans/update-plan.dto";
+import { QueryPlansDto } from "../dto/plans/query-plans.dto";
+import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { User } from "../entities/user.entity";
+import { Plan } from "../entities/plan.entity";
+import { PaginatedResponse } from "../common/dto/paginated-response.dto";
+
+@Controller("plans")
+@UseGuards(JwtAuthGuard)
+export class PlansController {
+  constructor(private readonly plansService: PlansService) {}
+
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(
+    @CurrentUser() user: User,
+    @Body() createPlanDto: CreatePlanDto,
+  ): Promise<Plan> {
+    return await this.plansService.create(user.id, createPlanDto);
+  }
+
+  @Get()
+  async findAll(
+    @CurrentUser() user: User,
+    @Query() query: QueryPlansDto,
+  ): Promise<PaginatedResponse<Plan>> {
+    return await this.plansService.findAll(user.id, query);
+  }
+
+  @Get(":id")
+  async findOne(
+    @CurrentUser() user: User,
+    @Param("id") id: string,
+  ): Promise<Plan> {
+    return await this.plansService.findOne(id, user.id);
+  }
+
+  @Patch(":id")
+  async update(
+    @CurrentUser() user: User,
+    @Param("id") id: string,
+    @Body() updatePlanDto: UpdatePlanDto,
+  ): Promise<Plan> {
+    return await this.plansService.update(id, user.id, updatePlanDto);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @CurrentUser() user: User,
+    @Param("id") id: string,
+  ): Promise<void> {
+    await this.plansService.softDelete(id, user.id);
+  }
+}

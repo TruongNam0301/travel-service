@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Queue, Job, JobsOptions } from 'bullmq';
+import { Injectable, Logger } from "@nestjs/common";
+import { Queue, Job, JobsOptions } from "bullmq";
 
 interface JobStatus {
   id: string | undefined;
@@ -95,7 +95,7 @@ export class QueueService {
         total: waiting + active + completed + failed + delayed,
       };
     } catch (error) {
-      this.logger.error('Failed to get queue metrics:', error);
+      this.logger.error("Failed to get queue metrics:", error);
       throw error;
     }
   }

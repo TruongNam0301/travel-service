@@ -5,8 +5,8 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
 
 /**
  * Global Exception Filter
@@ -29,7 +29,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const message =
       exception instanceof HttpException
         ? exception.message
-        : 'Internal server error';
+        : "Internal server error";
 
     const errorResponse = {
       statusCode: status,
@@ -37,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       method: request.method,
       message,
-      ...(process.env.NODE_ENV === 'development' && {
+      ...(process.env.NODE_ENV === "development" && {
         stack: exception instanceof Error ? exception.stack : undefined,
       }),
     };

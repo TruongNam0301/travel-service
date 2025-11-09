@@ -1,6 +1,6 @@
 export interface JwtPayload {
   sub: string; // userId
   email: string;
-  role: 'user' | 'admin';
+  role: "user" | "admin";
   jti?: string; // JWT ID for refresh tokens
 }

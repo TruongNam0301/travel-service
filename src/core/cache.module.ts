@@ -1,8 +1,8 @@
-import { Module, OnApplicationShutdown, Global, Logger } from '@nestjs/common';
-import { CacheModule } from '@nestjs/cache-manager';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { redisStore } from 'cache-manager-redis-store';
-import type { RedisClientOptions } from 'redis';
+import { Module, OnApplicationShutdown, Global, Logger } from "@nestjs/common";
+import { CacheModule } from "@nestjs/cache-manager";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { redisStore } from "cache-manager-redis-store";
+import type { RedisClientOptions } from "redis";
 
 interface RedisConfig {
   host: string;
@@ -17,7 +17,7 @@ interface RedisConfig {
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const redisConfig = configService.get<RedisConfig>('redis')!;
+        const redisConfig = configService.get<RedisConfig>("redis")!;
         return {
           store: redisStore,
           host: redisConfig.host,
@@ -38,6 +38,6 @@ export class CacheConfigModule implements OnApplicationShutdown {
 
   onApplicationShutdown(signal?: string): void {
     this.logger.log(`Closing cache connections... (signal: ${signal})`);
-    this.logger.log('Cache connections closed');
+    this.logger.log("Cache connections closed");
   }
 }

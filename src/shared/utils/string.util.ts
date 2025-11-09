@@ -14,7 +14,7 @@ export function normalizeEmail(email: string): string {
  */
 export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - 3) + '...';
+  return str.slice(0, maxLength - 3) + "...";
 }
 
 /**
@@ -24,9 +24,9 @@ export function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 /**
@@ -43,7 +43,7 @@ export function capitalize(str: string): string {
 export function toTitleCase(str: string): string {
   return str
     .toLowerCase()
-    .split(' ')
+    .split(" ")
     .map((word) => capitalize(word))
-    .join(' ');
+    .join(" ");
 }

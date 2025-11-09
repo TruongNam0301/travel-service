@@ -1,18 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
-import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
-import { ConfigService } from '@nestjs/config';
-import { UsersService } from './users.service';
-import { User } from '../entities/user.entity';
-import { RefreshToken } from '../entities/refresh-token.entity';
-import { RegisterDto } from '../dto/auth/register.dto';
-import { LoginDto } from '../dto/auth/login.dto';
-import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
-import { AuthException } from '../common/exceptions/auth.exception';
-import { JWT_CONSTANTS } from '../shared/constants/jwt.constant';
+import { Injectable } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, LessThan } from "typeorm";
+import * as bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
+import { ConfigService } from "@nestjs/config";
+import { UsersService } from "./users.service";
+import { User } from "../entities/user.entity";
+import { RefreshToken } from "../entities/refresh-token.entity";
+import { RegisterDto } from "../dto/auth/register.dto";
+import { LoginDto } from "../dto/auth/login.dto";
+import { JwtPayload } from "../common/interfaces/jwt-payload.interface";
+import { AuthException } from "../common/exceptions/auth.exception";
+import { JWT_CONSTANTS } from "../shared/constants/jwt.constant";
 
 @Injectable()
 export class AuthService {
@@ -117,7 +117,7 @@ export class AuthService {
     // Find refresh token by jti
     const tokenRecord = await this.refreshTokenRepository.findOne({
       where: { jti, isRevoked: false },
-      relations: ['user'],
+      relations: ["user"],
     });
 
     if (!tokenRecord) {
@@ -216,7 +216,7 @@ export class AuthService {
     // Generate access token
     const accessToken = this.jwtService.sign(payload as any, {
       secret: this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_SECRET),
-      expiresIn: '1h',
+      expiresIn: "1h",
       issuer:
         this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_ISSUER) ||
         JWT_CONSTANTS.DEFAULT_ISSUER,
@@ -237,7 +237,7 @@ export class AuthService {
         this.configService.get<string>(
           JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET,
         ) || this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_SECRET),
-      expiresIn: '7d',
+      expiresIn: "7d",
       issuer:
         this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_ISSUER) ||
         JWT_CONSTANTS.DEFAULT_ISSUER,

@@ -1,16 +1,16 @@
-import { Controller, Get, Patch, Body, UseGuards } from '@nestjs/common';
-import { UsersService } from '../services/users.service';
-import { UpdateUserDto } from '../dto/users/update-user.dto';
-import { User } from '../entities/user.entity';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Controller, Get, Patch, Body, UseGuards } from "@nestjs/common";
+import { UsersService } from "../services/users.service";
+import { UpdateUserDto } from "../dto/users/update-user.dto";
+import { User } from "../entities/user.entity";
+import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
 
-@Controller('users')
+@Controller("users")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Get('me')
+  @Get("me")
   async getMe(@CurrentUser() user: User): Promise<Partial<User>> {
     const fullUser = await this.usersService.findById(user.id);
 
@@ -22,7 +22,7 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch('me')
+  @Patch("me")
   async updateMe(
     @CurrentUser() user: User,
     @Body() updateUserDto: UpdateUserDto,

@@ -5,13 +5,13 @@ import {
   UseGuards,
   Req,
   Headers,
-} from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
-import { AuthService } from '../services/auth.service';
-import { LoginDto } from '../dto/auth/login.dto';
-import { RegisterDto } from '../dto/auth/register.dto';
-import { JwtRefreshAuthGuard } from '../common/guards/jwt-refresh-auth.guard';
+} from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
+import type { Request } from "express";
+import { AuthService } from "../services/auth.service";
+import { LoginDto } from "../dto/auth/login.dto";
+import { RegisterDto } from "../dto/auth/register.dto";
+import { JwtRefreshAuthGuard } from "../common/guards/jwt-refresh-auth.guard";
 
 interface RefreshTokenPayload {
   userId: string;
@@ -19,29 +19,29 @@ interface RefreshTokenPayload {
   refreshToken: string;
 }
 
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
+  @Post("register")
   async register(
     @Body() registerDto: RegisterDto,
-    @Headers('user-agent') userAgent?: string,
+    @Headers("user-agent") userAgent?: string,
   ) {
     return await this.authService.register(registerDto, { userAgent });
   }
 
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
-  @Post('login')
+  @Post("login")
   async login(
     @Body() loginDto: LoginDto,
-    @Headers('user-agent') userAgent?: string,
+    @Headers("user-agent") userAgent?: string,
   ) {
     return await this.authService.login(loginDto, { userAgent });
   }
 
   @UseGuards(JwtRefreshAuthGuard)
-  @Post('refresh')
+  @Post("refresh")
   async refresh(@Req() req: Request & { user: RefreshTokenPayload }) {
     const { jti, refreshToken } = req.user;
 
@@ -49,12 +49,12 @@ export class AuthController {
   }
 
   @UseGuards(JwtRefreshAuthGuard)
-  @Post('logout')
+  @Post("logout")
   async logout(@Req() req: Request & { user: RefreshTokenPayload }) {
     const { jti } = req.user;
 
     await this.authService.logout(jti);
 
-    return { message: 'Logged out successfully' };
+    return { message: "Logged out successfully" };
   }
 }

@@ -1,11 +1,11 @@
-import { registerAs } from '@nestjs/config';
-import { RedisOptions } from 'ioredis';
+import { registerAs } from "@nestjs/config";
+import { RedisOptions } from "ioredis";
 
 export default registerAs(
-  'redis',
+  "redis",
   (): RedisOptions => ({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    host: process.env.REDIS_HOST || "localhost",
+    port: parseInt(process.env.REDIS_PORT || "6379", 10),
     password: process.env.REDIS_PASSWORD || undefined,
     retryStrategy: (times: number) => {
       // Reconnect after a delay

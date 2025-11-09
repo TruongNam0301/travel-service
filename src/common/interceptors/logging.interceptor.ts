@@ -4,10 +4,10 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
-} from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { tap } from "rxjs/operators";
+import { Request, Response } from "express";
 
 /**
  * Logging Interceptor
@@ -22,7 +22,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
     const { method, url, ip } = request;
-    const userAgent = request.get('user-agent') || '';
+    const userAgent = request.get("user-agent") || "";
 
     const now = Date.now();
 

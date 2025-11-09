@@ -1,5 +1,5 @@
-import { IsOptional, IsInt, Min, Max, IsIn } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsInt, Min, Max, IsIn } from "class-validator";
+import { Type } from "class-transformer";
 
 /**
  * Base Pagination DTO
@@ -23,6 +23,6 @@ export class BasePaginationDto {
   sortBy?: string;
 
   @IsOptional()
-  @IsIn(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+  @IsIn(["ASC", "DESC"])
+  sortOrder?: "ASC" | "DESC" = "DESC";
 }

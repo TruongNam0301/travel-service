@@ -5,9 +5,9 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
-import { AppException } from './app.exception';
+} from "@nestjs/common";
+import { Request, Response } from "express";
+import { AppException } from "./app.exception";
 
 interface ErrorResponse {
   statusCode: number;
@@ -61,7 +61,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof AppException) {
       const response = exception.getResponse() as HttpExceptionResponse;
       const message = Array.isArray(response.message)
-        ? response.message.join(', ')
+        ? response.message.join(", ")
         : response.message || exception.message;
       return {
         statusCode: exception.getStatus(),
@@ -71,7 +71,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message,
         errorCode: response.errorCode,
         metadata: response.metadata,
-        ...(process.env.NODE_ENV === 'development' && {
+        ...(process.env.NODE_ENV === "development" && {
           stack: exception.stack,
         }),
       };
@@ -83,12 +83,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       let message: string;
-      if (typeof exceptionResponse === 'string') {
+      if (typeof exceptionResponse === "string") {
         message = exceptionResponse;
       } else {
         const responseObj = exceptionResponse as HttpExceptionResponse;
         const msgValue = responseObj.message || exception.message;
-        message = Array.isArray(msgValue) ? msgValue.join(', ') : msgValue;
+        message = Array.isArray(msgValue) ? msgValue.join(", ") : msgValue;
       }
 
       return {
@@ -97,7 +97,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         path,
         method,
         message,
-        ...(process.env.NODE_ENV === 'development' && {
+        ...(process.env.NODE_ENV === "development" && {
           stack: exception.stack,
         }),
       };
@@ -110,9 +110,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp,
       path,
       method,
-      message: error.message || 'Internal server error',
-      errorCode: 'INTERNAL_SERVER_ERROR',
-      ...(process.env.NODE_ENV === 'development' && {
+      message: error.message || "Internal server error",
+      errorCode: "INTERNAL_SERVER_ERROR",
+      ...(process.env.NODE_ENV === "development" && {
         stack: error.stack,
       }),
     };
@@ -124,16 +124,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // Log with appropriate level based on status code
     if (statusCode >= 500) {
       this.logger.error(
-        `${method} ${path} - ${statusCode} - ${errorCode || 'ERROR'}: ${message}`,
-        exception instanceof Error ? exception.stack : '',
+        `${method} ${path} - ${statusCode} - ${errorCode || "ERROR"}: ${message}`,
+        exception instanceof Error ? exception.stack : "",
       );
     } else if (statusCode >= 400) {
       this.logger.warn(
-        `${method} ${path} - ${statusCode} - ${errorCode || 'ERROR'}: ${message}`,
+        `${method} ${path} - ${statusCode} - ${errorCode || "ERROR"}: ${message}`,
       );
     } else {
       this.logger.log(
-        `${method} ${path} - ${statusCode} - ${errorCode || 'INFO'}: ${message}`,
+        `${method} ${path} - ${statusCode} - ${errorCode || "INFO"}: ${message}`,
       );
     }
   }

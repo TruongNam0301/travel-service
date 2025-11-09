@@ -1,8 +1,8 @@
-import { Module, OnApplicationShutdown } from '@nestjs/common';
-import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DataSource } from 'typeorm';
-import { Logger } from '@nestjs/common';
+import { Module, OnApplicationShutdown } from "@nestjs/common";
+import { TypeOrmModule, TypeOrmModuleOptions } from "@nestjs/typeorm";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { DataSource } from "typeorm";
+import { Logger } from "@nestjs/common";
 
 @Module({
   imports: [
@@ -10,7 +10,7 @@ import { Logger } from '@nestjs/common';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
-        const dbConfig = configService.get<TypeOrmModuleOptions>('database')!;
+        const dbConfig = configService.get<TypeOrmModuleOptions>("database")!;
         return {
           ...dbConfig,
           autoLoadEntities: true,
@@ -30,10 +30,10 @@ export class DatabaseModule implements OnApplicationShutdown {
     try {
       if (this.dataSource.isInitialized) {
         await this.dataSource.destroy();
-        this.logger.log('Database connection closed successfully');
+        this.logger.log("Database connection closed successfully");
       }
     } catch (error) {
-      this.logger.error('Error closing database connection', error);
+      this.logger.error("Error closing database connection", error);
     }
   }
 }

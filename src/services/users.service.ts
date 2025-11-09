@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../entities/user.entity';
-import { CreateUserDto } from '../dto/users/create-user.dto';
-import { UpdateUserDto } from '../dto/users/update-user.dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { User } from "../entities/user.entity";
+import { CreateUserDto } from "../dto/users/create-user.dto";
+import { UpdateUserDto } from "../dto/users/update-user.dto";
 
 @Injectable()
 export class UsersService {
@@ -24,8 +24,8 @@ export class UsersService {
   async findByEmail(email: string): Promise<User | null> {
     // Case-insensitive email search using LOWER function
     const user = await this.usersRepository
-      .createQueryBuilder('user')
-      .where('LOWER(user.email) = LOWER(:email)', { email })
+      .createQueryBuilder("user")
+      .where("LOWER(user.email) = LOWER(:email)", { email })
       .getOne();
 
     return user;

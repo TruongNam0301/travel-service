@@ -1,28 +1,28 @@
-import { HttpStatus } from '@nestjs/common';
-import { AppException } from './app.exception';
+import { HttpStatus } from "@nestjs/common";
+import { AppException } from "./app.exception";
 
 export class AuthException extends AppException {
   static InvalidCredentials(): AuthException {
     return new AuthException(
-      'Invalid email or password',
+      "Invalid email or password",
       HttpStatus.UNAUTHORIZED,
-      'AUTH_INVALID_CREDENTIALS',
+      "AUTH_INVALID_CREDENTIALS",
     );
   }
 
   static TokenExpired(): AuthException {
     return new AuthException(
-      'Token has expired',
+      "Token has expired",
       HttpStatus.UNAUTHORIZED,
-      'AUTH_TOKEN_EXPIRED',
+      "AUTH_TOKEN_EXPIRED",
     );
   }
 
-  static Unauthorized(message = 'Unauthorized access'): AuthException {
+  static Unauthorized(message = "Unauthorized access"): AuthException {
     return new AuthException(
       message,
       HttpStatus.UNAUTHORIZED,
-      'AUTH_UNAUTHORIZED',
+      "AUTH_UNAUTHORIZED",
     );
   }
 
@@ -30,15 +30,15 @@ export class AuthException extends AppException {
     return new AuthException(
       `Email ${email} is already registered`,
       HttpStatus.CONFLICT,
-      'AUTH_EMAIL_EXISTS',
+      "AUTH_EMAIL_EXISTS",
     );
   }
 
   static InvalidRefreshToken(): AuthException {
     return new AuthException(
-      'Invalid or revoked refresh token',
+      "Invalid or revoked refresh token",
       HttpStatus.UNAUTHORIZED,
-      'AUTH_INVALID_REFRESH_TOKEN',
+      "AUTH_INVALID_REFRESH_TOKEN",
     );
   }
 }

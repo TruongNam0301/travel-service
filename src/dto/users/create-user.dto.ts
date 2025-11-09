@@ -4,15 +4,15 @@ import {
   IsOptional,
   IsObject,
   MinLength,
-} from 'class-validator';
-import { UserRole, UserStatus } from '../../entities/user.entity';
+} from "class-validator";
+import { UserRole, UserStatus } from "../../entities/user.entity";
 
 export class CreateUserDto {
   @IsEmail()
   email: string;
 
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MinLength(8, { message: "Password must be at least 8 characters long" })
   password: string;
 
   @IsString()

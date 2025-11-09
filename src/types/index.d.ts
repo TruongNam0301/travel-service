@@ -1,4 +1,4 @@
-import { User } from '../entities/user.entity';
+import { User } from "../entities/user.entity";
 
 /**
  * Extend Express Request to include user from JWT authentication

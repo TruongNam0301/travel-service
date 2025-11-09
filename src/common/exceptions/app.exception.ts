@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus } from "@nestjs/common";
 
 /**
  * Base application exception
@@ -31,7 +31,7 @@ export class DatabaseException extends AppException {
   constructor(
     message: string,
     statusCode: HttpStatus = HttpStatus.INTERNAL_SERVER_ERROR,
-    errorCode: string = 'DATABASE_ERROR',
+    errorCode: string = "DATABASE_ERROR",
     metadata?: Record<string, any>,
   ) {
     super(message, statusCode, errorCode, metadata);
@@ -45,7 +45,7 @@ export class ValidationException extends AppException {
   constructor(
     message: string,
     metadata?: Record<string, any>,
-    errorCode: string = 'VALIDATION_ERROR',
+    errorCode: string = "VALIDATION_ERROR",
   ) {
     super(message, HttpStatus.BAD_REQUEST, errorCode, metadata);
   }
@@ -58,7 +58,7 @@ export class NotFoundException extends AppException {
   constructor(
     resource: string,
     identifier?: string | number,
-    errorCode: string = 'RESOURCE_NOT_FOUND',
+    errorCode: string = "RESOURCE_NOT_FOUND",
   ) {
     const message = identifier
       ? `${resource} with identifier '${identifier}' not found`
@@ -72,8 +72,8 @@ export class NotFoundException extends AppException {
  */
 export class AuthorizationException extends AppException {
   constructor(
-    message: string = 'Insufficient permissions',
-    errorCode: string = 'UNAUTHORIZED',
+    message: string = "Insufficient permissions",
+    errorCode: string = "UNAUTHORIZED",
   ) {
     super(message, HttpStatus.FORBIDDEN, errorCode);
   }
@@ -84,8 +84,8 @@ export class AuthorizationException extends AppException {
  */
 export class AuthenticationException extends AppException {
   constructor(
-    message: string = 'Authentication required',
-    errorCode: string = 'UNAUTHENTICATED',
+    message: string = "Authentication required",
+    errorCode: string = "UNAUTHENTICATED",
   ) {
     super(message, HttpStatus.UNAUTHORIZED, errorCode);
   }
@@ -98,7 +98,7 @@ export class BusinessLogicException extends AppException {
   constructor(
     message: string,
     metadata?: Record<string, any>,
-    errorCode: string = 'BUSINESS_LOGIC_ERROR',
+    errorCode: string = "BUSINESS_LOGIC_ERROR",
   ) {
     super(message, HttpStatus.UNPROCESSABLE_ENTITY, errorCode, metadata);
   }
@@ -111,7 +111,7 @@ export class QueueException extends AppException {
   constructor(
     message: string,
     statusCode: HttpStatus = HttpStatus.INTERNAL_SERVER_ERROR,
-    errorCode: string = 'QUEUE_ERROR',
+    errorCode: string = "QUEUE_ERROR",
     metadata?: Record<string, any>,
   ) {
     super(message, statusCode, errorCode, metadata);
@@ -125,7 +125,7 @@ export class ExternalServiceException extends AppException {
   constructor(
     service: string,
     message: string,
-    errorCode: string = 'EXTERNAL_SERVICE_ERROR',
+    errorCode: string = "EXTERNAL_SERVICE_ERROR",
     metadata?: Record<string, any>,
   ) {
     super(

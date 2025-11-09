@@ -1,12 +1,14 @@
-import { Module } from '@nestjs/common';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
-import { AppCoreModule } from './core/app-core.module';
-import { HealthModule } from './modules/health.module';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { HttpExceptionFilter } from './common/exceptions';
-import { UsersModule } from './modules/users.module';
-import { AuthModule } from './modules/auth.module';
+import { Module } from "@nestjs/common";
+import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { APP_GUARD, APP_FILTER } from "@nestjs/core";
+import { AppCoreModule } from "./core/app-core.module";
+import { HealthModule } from "./modules/health.module";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { HttpExceptionFilter } from "./common/exceptions";
+import { UsersModule } from "./modules/users.module";
+import { AuthModule } from "./modules/auth.module";
+import { PlansModule } from "./modules/plans.module";
+import { JobsModule } from "./modules/jobs.module";
 
 @Module({
   imports: [
@@ -20,8 +22,8 @@ import { AuthModule } from './modules/auth.module';
       useFactory: (configService: ConfigService) => ({
         throttlers: [
           {
-            ttl: configService.get<number>('RATE_LIMIT_TTL', 60) * 1000, // Convert to ms
-            limit: configService.get<number>('RATE_LIMIT_MAX', 100),
+            ttl: configService.get<number>("RATE_LIMIT_TTL", 60) * 1000, // Convert to ms
+            limit: configService.get<number>("RATE_LIMIT_MAX", 100),
           },
         ],
         // Future: Add Redis storage for distributed rate limiting
@@ -35,6 +37,8 @@ import { AuthModule } from './modules/auth.module';
     // Feature modules
     UsersModule,
     AuthModule,
+    PlansModule,
+    JobsModule,
   ],
   providers: [
     // Global exception filter

@@ -3,13 +3,13 @@
  * Centralized definition of all possible job states
  */
 export const JOB_STATES = {
-  QUEUED: 'queued',
-  PENDING: 'pending',
-  PROCESSING: 'processing',
-  RETRYING: 'retrying',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  CANCELLED: 'cancelled',
+  QUEUED: "queued",
+  PENDING: "pending",
+  PROCESSING: "processing",
+  RETRYING: "retrying",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  CANCELLED: "cancelled",
 } as const;
 
 export type JobState = (typeof JOB_STATES)[keyof typeof JOB_STATES];

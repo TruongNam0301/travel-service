@@ -1,4 +1,4 @@
-import { Repository, FindOptionsWhere } from 'typeorm';
+import { Repository, FindOptionsWhere } from "typeorm";
 
 export interface SoftDeletable {
   id: string;

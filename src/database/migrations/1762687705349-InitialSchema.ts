@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 export class InitialSchema1762687705349 implements MigrationInterface {
-  name = 'InitialSchema1762687705349';
+  name = "InitialSchema1762687705349";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Enable pgvector extension
