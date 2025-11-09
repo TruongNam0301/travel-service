@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { AppCoreModule } from './core/app-core.module';
-import { HealthModule } from './health/health.module';
+import { HealthModule } from './modules/health.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { HttpExceptionFilter } from './common/exceptions';
+import { UsersModule } from './modules/users.module';
+import { AuthModule } from './modules/auth.module';
 
 @Module({
   imports: [
@@ -30,8 +32,9 @@ import { HttpExceptionFilter } from './common/exceptions';
     // Health check endpoints
     HealthModule,
 
-    // Future feature modules will be imported here
-    // Example: UsersModule, PlansModule, etc.
+    // Feature modules
+    UsersModule,
+    AuthModule,
   ],
   providers: [
     // Global exception filter

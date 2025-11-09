@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JWT_CONSTANTS } from '../shared/constants/jwt.constant';
 
 export const envSchema = z.object({
   NODE_ENV: z
@@ -31,6 +32,22 @@ export const envSchema = z.object({
     .default('http://localhost:3000,http://localhost:5173'),
   RATE_LIMIT_TTL: z.coerce.number().default(60), // seconds
   RATE_LIMIT_MAX: z.coerce.number().default(100), // max requests per TTL
+
+  // JWT Authentication
+  [JWT_CONSTANTS.ENV_KEYS.JWT_SECRET]: z
+    .string()
+    .min(32, 'JWT_SECRET must be at least 32 characters'),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET]: z
+    .string()
+    .min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_ACCESS_EXPIRATION]: z.string().default('1h'),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_EXPIRATION]: z.string().default('7d'),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_ISSUER]: z
+    .string()
+    .default(JWT_CONSTANTS.DEFAULT_ISSUER),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_AUDIENCE]: z
+    .string()
+    .default(JWT_CONSTANTS.DEFAULT_AUDIENCE),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
