@@ -7,11 +7,13 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from "typeorm";
 import { Plan } from "./plan.entity";
 import { Message } from "./message.entity";
 
 @Entity("conversations")
+@Index(["planId", "isDeleted", "lastMessageAt"])
 export class Conversation {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -21,6 +23,16 @@ export class Conversation {
 
   @Column({ type: "varchar", length: 255, nullable: true })
   title?: string;
+
+  @Column({ name: "is_default", type: "boolean", default: false })
+  isDefault: boolean;
+
+  @Column({ name: "last_message_at", type: "timestamptz", nullable: true })
+  @Index()
+  lastMessageAt?: Date;
+
+  @Column({ name: "message_count", type: "integer", default: 0 })
+  messageCount: number;
 
   // Soft delete fields
   @Column({ name: "is_deleted", type: "boolean", default: false })

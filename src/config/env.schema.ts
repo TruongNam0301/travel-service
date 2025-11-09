@@ -26,6 +26,9 @@ export const envSchema = z.object({
   // Queue
   QUEUE_CONCURRENCY: z.coerce.number().default(5),
 
+  // Conversations
+  CREATE_DEFAULT_CONVERSATION: z.coerce.boolean().default(true),
+
   // Security
   CORS_ORIGINS: z
     .string()

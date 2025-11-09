@@ -15,7 +15,7 @@ export enum MessageRole {
 }
 
 @Entity("messages")
-@Index(["conversationId", "createdAt"])
+@Index(["conversationId", "createdAt", "id"])
 export class Message {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -28,6 +28,9 @@ export class Message {
 
   @Column({ type: "text" })
   content: string;
+
+  @Column({ name: "created_by", type: "uuid" })
+  createdBy: string;
 
   // Soft delete fields
   @Column({ name: "is_deleted", type: "boolean", default: false })

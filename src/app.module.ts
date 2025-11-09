@@ -9,6 +9,8 @@ import { UsersModule } from "./modules/users.module";
 import { AuthModule } from "./modules/auth.module";
 import { PlansModule } from "./modules/plans.module";
 import { JobsModule } from "./modules/jobs.module";
+import { ConversationsModule } from "./modules/conversations.module";
+import { MessagesModule } from "./modules/messages.module";
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { JobsModule } from "./modules/jobs.module";
     AuthModule,
     PlansModule,
     JobsModule,
+    ConversationsModule,
+    MessagesModule,
   ],
   providers: [
     // Global exception filter

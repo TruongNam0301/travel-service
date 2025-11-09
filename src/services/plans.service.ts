@@ -3,14 +3,18 @@ import {
   NotFoundException,
   ForbiddenException,
   Logger,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, FindOptionsWhere, ILike } from "typeorm";
+import { Repository, FindOptionsWhere, ILike, DataSource } from "typeorm";
+import { ConfigService } from "@nestjs/config";
 import { Plan } from "../entities/plan.entity";
 import { CreatePlanDto } from "../dto/plans/create-plan.dto";
 import { UpdatePlanDto } from "../dto/plans/update-plan.dto";
 import { QueryPlansDto } from "../dto/plans/query-plans.dto";
 import { PaginatedResponse } from "../common/dto/paginated-response.dto";
+import { ConversationsService } from "./conversations.service";
 
 @Injectable()
 export class PlansService {
@@ -19,6 +23,10 @@ export class PlansService {
   constructor(
     @InjectRepository(Plan)
     private readonly plansRepository: Repository<Plan>,
+    private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => ConversationsService))
+    private readonly conversationsService: ConversationsService,
   ) {}
 
   /**
@@ -31,21 +39,55 @@ export class PlansService {
       title: createPlanDto.title,
     });
 
-    const plan = this.plansRepository.create({
-      ...createPlanDto,
-      userId,
-      isDeleted: false,
-    });
+    // Use transaction to create plan and default conversation atomically
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedPlan = await this.plansRepository.save(plan);
+    try {
+      const plan = this.plansRepository.create({
+        ...createPlanDto,
+        userId,
+        isDeleted: false,
+      });
 
-    this.logger.log({
-      action: "plan_created",
-      userId,
-      planId: savedPlan.id,
-    });
+      const savedPlan = await queryRunner.manager.save(Plan, plan);
 
-    return savedPlan;
+      // Auto-create default conversation if config enabled
+      const createDefaultConversation = this.configService.get<boolean>(
+        "CREATE_DEFAULT_CONVERSATION",
+        true,
+      );
+
+      if (createDefaultConversation) {
+        await this.conversationsService.createWithManager(
+          queryRunner.manager,
+          savedPlan.id,
+          { title: undefined, isDefault: true },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log({
+        action: "plan_created",
+        userId,
+        planId: savedPlan.id,
+        defaultConversationCreated: createDefaultConversation,
+      });
+
+      return savedPlan;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error({
+        action: "plan_creation_failed",
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
