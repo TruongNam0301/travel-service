@@ -1,10 +1,11 @@
 import { Module } from "@nestjs/common";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
-import { APP_GUARD, APP_FILTER } from "@nestjs/core";
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from "@nestjs/core";
 import { AppCoreModule } from "./core/app-core.module";
 import { HealthModule } from "./modules/health.module";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { HttpExceptionFilter } from "./common/exceptions";
+import { TransformInterceptor } from "./common/interceptors";
 import { UsersModule } from "./modules/users.module";
 import { AuthModule } from "./modules/auth.module";
 import { PlansModule } from "./modules/plans.module";
@@ -49,6 +50,11 @@ import { MessagesModule } from "./modules/messages.module";
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    // Global response transformer
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TransformInterceptor,
     },
     // Global rate limiting guard
     {

@@ -8,17 +8,7 @@ import {
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { AppException } from "./app.exception";
-
-interface ErrorResponse {
-  statusCode: number;
-  timestamp: string;
-  path: string;
-  method: string;
-  message: string;
-  errorCode?: string;
-  metadata?: Record<string, unknown>;
-  stack?: string;
-}
+import { BaseErrorResponse, ErrorDetails } from "../dto/base-response.dto";
 
 interface HttpExceptionResponse {
   statusCode: number;
@@ -52,7 +42,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private buildErrorResponse(
     exception: unknown,
     request: Request,
-  ): ErrorResponse {
+  ): BaseErrorResponse {
     const timestamp = new Date().toISOString();
     const path = request.url;
     const method = request.method;
@@ -63,17 +53,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const message = Array.isArray(response.message)
         ? response.message.join(", ")
         : response.message || exception.message;
+
+      const errorDetails: ErrorDetails = {
+        errorCode: response.errorCode,
+        metadata: response.metadata,
+      };
+
+      if (process.env.NODE_ENV === "development") {
+        errorDetails.stack = exception.stack;
+      }
+
       return {
+        success: false,
         statusCode: exception.getStatus(),
+        message,
+        error: errorDetails,
         timestamp,
         path,
         method,
-        message,
-        errorCode: response.errorCode,
-        metadata: response.metadata,
-        ...(process.env.NODE_ENV === "development" && {
-          stack: exception.stack,
-        }),
       };
     }
 
@@ -83,43 +80,63 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const exceptionResponse = exception.getResponse();
 
       let message: string;
+      let errorCode: string | undefined;
+      let metadata: Record<string, unknown> | undefined;
+
       if (typeof exceptionResponse === "string") {
         message = exceptionResponse;
       } else {
         const responseObj = exceptionResponse as HttpExceptionResponse;
         const msgValue = responseObj.message || exception.message;
         message = Array.isArray(msgValue) ? msgValue.join(", ") : msgValue;
+        errorCode = responseObj.errorCode;
+        metadata = responseObj.metadata;
+      }
+
+      const errorDetails: ErrorDetails = {
+        errorCode,
+        metadata,
+      };
+
+      if (process.env.NODE_ENV === "development") {
+        errorDetails.stack = exception.stack;
       }
 
       return {
+        success: false,
         statusCode: status,
+        message,
+        error: errorDetails,
         timestamp,
         path,
         method,
-        message,
-        ...(process.env.NODE_ENV === "development" && {
-          stack: exception.stack,
-        }),
       };
     }
 
     // Handle unknown errors
     const error = exception as Error;
+    const errorDetails: ErrorDetails = {
+      errorCode: "INTERNAL_SERVER_ERROR",
+    };
+
+    if (process.env.NODE_ENV === "development") {
+      errorDetails.stack = error.stack;
+    }
+
     return {
+      success: false,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: error.message || "Internal server error",
+      error: errorDetails,
       timestamp,
       path,
       method,
-      message: error.message || "Internal server error",
-      errorCode: "INTERNAL_SERVER_ERROR",
-      ...(process.env.NODE_ENV === "development" && {
-        stack: error.stack,
-      }),
     };
   }
 
-  private logError(exception: unknown, errorResponse: ErrorResponse): void {
-    const { statusCode, path, method, message, errorCode } = errorResponse;
+  private logError(exception: unknown, errorResponse: BaseErrorResponse): void {
+    const { statusCode, path, method, message, error } = errorResponse;
+    const errorCode = error.errorCode;
 
     // Log with appropriate level based on status code
     if (statusCode >= 500) {

@@ -1,13 +1,9 @@
-import { Injectable } from "@nestjs/common";
+﻿import { Injectable, Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, LessThan } from "typeorm";
 import * as bcrypt from "bcrypt";
-import { v4 as uuidv4 } from "uuid";
 import { ConfigService } from "@nestjs/config";
 import { UsersService } from "./users.service";
 import { User } from "../entities/user.entity";
-import { RefreshToken } from "../entities/refresh-token.entity";
 import { RegisterDto } from "../dto/auth/register.dto";
 import { LoginDto } from "../dto/auth/login.dto";
 import { JwtPayload } from "../common/interfaces/jwt-payload.interface";
@@ -17,22 +13,18 @@ import { JWT_CONSTANTS } from "../shared/constants/jwt.constant";
 @Injectable()
 export class AuthService {
   private readonly saltRounds = 10;
+  private readonly logger = new Logger("AuthService");
 
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    @InjectRepository(RefreshToken)
-    private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
 
   /**
    * Register a new user
    */
-  async register(
-    registerDto: RegisterDto,
-    deviceInfo?: { userAgent?: string; deviceId?: string },
-  ): Promise<{
+  async register(registerDto: RegisterDto): Promise<{
     user: Partial<User>;
     accessToken: string;
     refreshToken: string;
@@ -49,15 +41,13 @@ export class AuthService {
 
     // Create user
     const user = await this.usersService.create({
-      ...registerDto,
-      password: passwordHash,
+      email: registerDto.email,
+      name: registerDto.name,
+      passwordHash: passwordHash,
     });
 
     // Generate tokens
-    const { accessToken, refreshToken } = await this.generateTokenPair(
-      user,
-      deviceInfo,
-    );
+    const { accessToken, refreshToken } = this.generateTokenPair(user);
 
     // Return sanitized user
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -73,10 +63,7 @@ export class AuthService {
   /**
    * Login user
    */
-  async login(
-    loginDto: LoginDto,
-    deviceInfo?: { userAgent?: string; deviceId?: string },
-  ): Promise<{
+  async login(loginDto: LoginDto): Promise<{
     user: Partial<User>;
     accessToken: string;
     refreshToken: string;
@@ -91,10 +78,7 @@ export class AuthService {
     await this.usersService.updateLastLogin(user.id);
 
     // Generate tokens
-    const { accessToken, refreshToken } = await this.generateTokenPair(
-      user,
-      deviceInfo,
-    );
+    const { accessToken, refreshToken } = this.generateTokenPair(user);
 
     // Return sanitized user
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -109,47 +93,20 @@ export class AuthService {
 
   /**
    * Refresh access token using refresh token
+   * Simply decodes and validates the JWT, no database check needed
    */
   async refreshAccessToken(
-    refreshTokenValue: string,
-    jti: string,
+    userId: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Find refresh token by jti
-    const tokenRecord = await this.refreshTokenRepository.findOne({
-      where: { jti, isRevoked: false },
-      relations: ["user"],
-    });
+    // Find user
+    const user = await this.usersService.findById(userId);
 
-    if (!tokenRecord) {
+    if (!user) {
       throw AuthException.InvalidRefreshToken();
     }
-
-    // Check if token is expired
-    if (new Date() > tokenRecord.expiresAt) {
-      throw AuthException.TokenExpired();
-    }
-
-    // Verify token hash
-    const isValid = await bcrypt.compare(
-      refreshTokenValue,
-      tokenRecord.tokenHash,
-    );
-
-    if (!isValid) {
-      throw AuthException.InvalidRefreshToken();
-    }
-
-    // Revoke old refresh token (token rotation)
-    await this.revokeRefreshToken(jti);
 
     // Generate new token pair
-    const { accessToken, refreshToken } = await this.generateTokenPair(
-      tokenRecord.user,
-      {
-        userAgent: tokenRecord.userAgent || undefined,
-        deviceId: tokenRecord.deviceId || undefined,
-      },
-    );
+    const { accessToken, refreshToken } = this.generateTokenPair(user);
 
     return {
       accessToken,
@@ -158,10 +115,13 @@ export class AuthService {
   }
 
   /**
-   * Logout user by revoking refresh token
+   * Logout user (client-side only - just remove tokens)
+   * No server-side action needed with stateless tokens
    */
-  async logout(jti: string): Promise<void> {
-    await this.revokeRefreshToken(jti);
+  logout(): void {
+    // With stateless JWT, logout is handled client-side
+    // Client should remove the tokens from storage
+    return;
   }
 
   /**
@@ -202,11 +162,12 @@ export class AuthService {
 
   /**
    * Generate access token and refresh token pair
+   * No database storage - stateless JWT approach
    */
-  private async generateTokenPair(
-    user: User,
-    deviceInfo?: { userAgent?: string; deviceId?: string },
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  private generateTokenPair(user: User): {
+    accessToken: string;
+    refreshToken: string;
+  } {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -225,14 +186,8 @@ export class AuthService {
         JWT_CONSTANTS.DEFAULT_AUDIENCE,
     });
 
-    // Generate refresh token with jti
-    const jti = this.generateJti();
-    const refreshTokenPayload: JwtPayload = {
-      ...payload,
-      jti,
-    };
-
-    const refreshToken = this.jwtService.sign(refreshTokenPayload as any, {
+    // Generate refresh token (no jti needed since not stored in DB)
+    const refreshToken = this.jwtService.sign(payload as any, {
       secret:
         this.configService.get<string>(
           JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET,
@@ -246,54 +201,9 @@ export class AuthService {
         JWT_CONSTANTS.DEFAULT_AUDIENCE,
     });
 
-    // Hash and store refresh token
-    const tokenHash = await this.hashRefreshToken(refreshToken);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-
-    await this.refreshTokenRepository.save({
-      userId: user.id,
-      tokenHash,
-      jti,
-      expiresAt,
-      isRevoked: false,
-      userAgent: deviceInfo?.userAgent,
-      deviceId: deviceInfo?.deviceId,
-    });
-
     return {
       accessToken,
       refreshToken,
     };
-  }
-
-  /**
-   * Hash refresh token
-   */
-  private async hashRefreshToken(token: string): Promise<string> {
-    return await bcrypt.hash(token, this.saltRounds);
-  }
-
-  /**
-   * Generate unique JWT ID
-   */
-  private generateJti(): string {
-    return uuidv4();
-  }
-
-  /**
-   * Revoke refresh token
-   */
-  private async revokeRefreshToken(jti: string): Promise<void> {
-    await this.refreshTokenRepository.update({ jti }, { isRevoked: true });
-  }
-
-  /**
-   * Clean up expired refresh tokens (can be called periodically)
-   */
-  async cleanupExpiredTokens(): Promise<void> {
-    await this.refreshTokenRepository.delete({
-      expiresAt: LessThan(new Date()),
-    });
   }
 }

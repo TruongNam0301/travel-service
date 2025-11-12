@@ -7,6 +7,7 @@ import {
   Logger,
 } from "@nestjs/common";
 import { Request, Response } from "express";
+import { BaseErrorResponse, ErrorDetails } from "../dto/base-response.dto";
 
 /**
  * Global Exception Filter
@@ -31,15 +32,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.message
         : "Internal server error";
 
-    const errorResponse = {
+    const errorDetails: ErrorDetails = {};
+
+    if (process.env.NODE_ENV === "development" && exception instanceof Error) {
+      errorDetails.stack = exception.stack;
+    }
+
+    const errorResponse: BaseErrorResponse = {
+      success: false,
       statusCode: status,
+      message,
+      error: errorDetails,
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      message,
-      ...(process.env.NODE_ENV === "development" && {
-        stack: exception instanceof Error ? exception.stack : undefined,
-      }),
     };
 
     // Log error details

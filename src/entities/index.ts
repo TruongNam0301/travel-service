@@ -1,6 +1,6 @@
 // Export all entities from a central location
 export * from "./user.entity";
-export * from "./refresh-token.entity";
+// export * from "./refresh-token.entity"; // No longer needed with stateless JWT
 export * from "./plan.entity";
 export * from "./job.entity";
 export * from "./job-type.entity";

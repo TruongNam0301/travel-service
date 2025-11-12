@@ -3,6 +3,8 @@ import {
   NotFoundException,
   Logger,
   ConflictException,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, EntityManager, FindOptionsWhere } from "typeorm";
@@ -22,6 +24,7 @@ export class ConversationsService {
     private readonly conversationsRepository: Repository<Conversation>,
     @InjectRepository(Plan)
     private readonly plansRepository: Repository<Plan>,
+    @Inject(forwardRef(() => PlansService))
     private readonly plansService: PlansService,
   ) {}
 

@@ -9,7 +9,6 @@ import {
   BeforeUpdate,
 } from "typeorm";
 import { Plan } from "./plan.entity";
-import { RefreshToken } from "./refresh-token.entity";
 
 export enum UserRole {
   USER = "user",
@@ -71,11 +70,6 @@ export class User {
   // Relations
   @OneToMany(() => Plan, (plan) => plan.user)
   plans: Plan[];
-
-  @OneToMany(() => RefreshToken, (token) => token.user, {
-    cascade: ["remove"],
-  })
-  refreshTokens: RefreshToken[];
 
   // Hooks
   @BeforeInsert()
