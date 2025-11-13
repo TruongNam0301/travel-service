@@ -21,7 +21,7 @@ export class AuthController {
     return await this.authService.register(registerDto);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post("login")
   async login(@Body() loginDto: LoginDto) {
     return await this.authService.login(loginDto);
@@ -32,12 +32,5 @@ export class AuthController {
   async refresh(@Req() req: Request & { user: RefreshTokenPayload }) {
     const { userId } = req.user;
     return await this.authService.refreshAccessToken(userId);
-  }
-
-  @UseGuards(JwtRefreshAuthGuard)
-  @Post("logout")
-  logout() {
-    this.authService.logout();
-    return { message: "Logged out successfully" };
   }
 }

@@ -10,7 +10,7 @@ import { JWT_CONSTANTS } from "../../shared/constants/jwt.constant";
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, "jwt") {
   constructor(
-    private readonly configService: ConfigService,
+    configService: ConfigService,
     private readonly usersService: UsersService,
   ) {
     super({

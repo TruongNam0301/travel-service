@@ -5,7 +5,7 @@ export class AuthException extends AppException {
   static InvalidCredentials(): AuthException {
     return new AuthException(
       "Invalid email or password",
-      HttpStatus.UNAUTHORIZED,
+      HttpStatus.BAD_REQUEST,
       "AUTH_INVALID_CREDENTIALS",
     );
   }
@@ -21,7 +21,7 @@ export class AuthException extends AppException {
   static Unauthorized(message = "Unauthorized access"): AuthException {
     return new AuthException(
       message,
-      HttpStatus.UNAUTHORIZED,
+      HttpStatus.BAD_REQUEST,
       "AUTH_UNAUTHORIZED",
     );
   }

@@ -1,19 +1,18 @@
-﻿import { Injectable, Logger } from "@nestjs/common";
+﻿import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
-import { ConfigService } from "@nestjs/config";
-import { UsersService } from "./users.service";
-import { User } from "../entities/user.entity";
-import { RegisterDto } from "../dto/auth/register.dto";
-import { LoginDto } from "../dto/auth/login.dto";
-import { JwtPayload } from "../common/interfaces/jwt-payload.interface";
 import { AuthException } from "../common/exceptions/auth.exception";
+import { JwtPayload } from "../common/interfaces/jwt-payload.interface";
+import { LoginDto } from "../dto/auth/login.dto";
+import { RegisterDto } from "../dto/auth/register.dto";
+import { User } from "../entities/user.entity";
 import { JWT_CONSTANTS } from "../shared/constants/jwt.constant";
+import { UsersService } from "./users.service";
 
 @Injectable()
 export class AuthService {
   private readonly saltRounds = 10;
-  private readonly logger = new Logger("AuthService");
 
   constructor(
     private readonly usersService: UsersService,
@@ -29,27 +28,22 @@ export class AuthService {
     accessToken: string;
     refreshToken: string;
   }> {
-    // Check if user already exists (case-insensitive)
     const existingUser = await this.usersService.findByEmail(registerDto.email);
 
     if (existingUser) {
       throw AuthException.EmailAlreadyExists(registerDto.email);
     }
 
-    // Hash password
     const passwordHash = await this.hashPassword(registerDto.password);
 
-    // Create user
     const user = await this.usersService.create({
       email: registerDto.email,
       name: registerDto.name,
       passwordHash: passwordHash,
     });
 
-    // Generate tokens
     const { accessToken, refreshToken } = this.generateTokenPair(user);
 
-    // Return sanitized user
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _, ...sanitizedUser } = user;
 
@@ -80,7 +74,6 @@ export class AuthService {
     // Generate tokens
     const { accessToken, refreshToken } = this.generateTokenPair(user);
 
-    // Return sanitized user
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _, ...sanitizedUser } = user;
 
@@ -98,14 +91,12 @@ export class AuthService {
   async refreshAccessToken(
     userId: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Find user
     const user = await this.usersService.findById(userId);
 
     if (!user) {
       throw AuthException.InvalidRefreshToken();
     }
 
-    // Generate new token pair
     const { accessToken, refreshToken } = this.generateTokenPair(user);
 
     return {
@@ -114,19 +105,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Logout user (client-side only - just remove tokens)
-   * No server-side action needed with stateless tokens
-   */
-  logout(): void {
-    // With stateless JWT, logout is handled client-side
-    // Client should remove the tokens from storage
-    return;
-  }
-
-  /**
-   * Validate user credentials
-   */
   async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
 
@@ -188,10 +166,9 @@ export class AuthService {
 
     // Generate refresh token (no jti needed since not stored in DB)
     const refreshToken = this.jwtService.sign(payload as any, {
-      secret:
-        this.configService.get<string>(
-          JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET,
-        ) || this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_SECRET),
+      secret: this.configService.get<string>(
+        JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET,
+      ),
       expiresIn: "7d",
       issuer:
         this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_ISSUER) ||
@@ -199,6 +176,14 @@ export class AuthService {
       audience:
         this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_AUDIENCE) ||
         JWT_CONSTANTS.DEFAULT_AUDIENCE,
+    });
+    console.log("refreshToken", refreshToken);
+    console.log("accessToken", accessToken);
+    console.log("payload", {
+      jwt: this.configService.get<string>(JWT_CONSTANTS.ENV_KEYS.JWT_SECRET),
+      resr: this.configService.get<string>(
+        JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET,
+      ),
     });
 
     return {

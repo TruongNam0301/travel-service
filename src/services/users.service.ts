@@ -22,7 +22,6 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    // Case-insensitive email search using LOWER function
     const user = await this.usersRepository
       .createQueryBuilder("user")
       .where("LOWER(user.email) = LOWER(:email)", { email })

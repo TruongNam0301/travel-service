@@ -120,7 +120,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
 
     if (process.env.NODE_ENV === "development") {
-      errorDetails.stack = error.stack;
+      errorDetails.stack = error instanceof Error ? error.stack : undefined;
     }
 
     return {
