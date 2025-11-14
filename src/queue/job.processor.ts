@@ -5,6 +5,10 @@ import * as llmClient_1 from "src/common/services/llm/llm.client";
 import { JobState } from "../entities/job.entity";
 import { JobsService } from "../services/jobs.service";
 import { JobData, JobResult } from "../shared/types/job.type";
+import {
+  PromptTemplatesService,
+  PromptTemplateError,
+} from "../services/prompt-templates.service";
 
 /**
  * Research Jobs Processor
@@ -20,6 +24,7 @@ export class JobProcessor extends WorkerHost {
     private readonly jobsService: JobsService,
     @Inject(llmClient_1.LLM_CLIENT)
     private readonly llmClient: llmClient_1.LlmClient,
+    private readonly promptTemplatesService: PromptTemplatesService,
   ) {
     super();
   }
@@ -135,11 +140,73 @@ export class JobProcessor extends WorkerHost {
     });
   }
 
+  /**
+   * Strips markdown code blocks from LLM response text before JSON parsing.
+   * Handles cases where LLM wraps JSON in ```json ... ``` or ``` ... ```
+   */
+  private stripMarkdownCodeBlocks(text: string): string {
+    let cleaned = text.trim();
+
+    // Remove markdown code block markers (```json or ```)
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "");
+    cleaned = cleaned.replace(/\s*```$/i, "");
+
+    return cleaned.trim();
+  }
+
+  /**
+   * Renders a prompt template for the given job type with context.
+   * Falls back to hardcoded prompt if template not found (backward compatibility).
+   * @param jobType - Job type name (e.g., 'research_hotel')
+   * @param params - Job parameters to use as template context
+   * @param fallbackPrompt - Hardcoded prompt to use if template rendering fails
+   * @returns Rendered prompt string
+   */
+  private async renderPrompt(
+    jobType: string,
+    params: Record<string, unknown>,
+    fallbackPrompt: string,
+  ): Promise<string> {
+    try {
+      const context = {
+        ...params,
+        jobId: params.jobId,
+      };
+      const rendered = await this.promptTemplatesService.render(
+        jobType,
+        context,
+      );
+      return rendered;
+    } catch (error) {
+      if (error instanceof PromptTemplateError) {
+        this.logger.warn({
+          action: "template_render_failed_fallback",
+          jobType,
+          templateId: error.templateId,
+          error: error.message,
+          usingFallback: true,
+        });
+      } else {
+        this.logger.warn({
+          action: "template_render_unexpected_error",
+          jobType,
+          error: error instanceof Error ? error.message : String(error),
+          usingFallback: true,
+        });
+      }
+      // Fallback to hardcoded prompt for backward compatibility
+      return fallbackPrompt;
+    }
+  }
+
   private async processResearchHotel(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
     const city = params.city as string;
     const nights = params.nights as number;
+    const locationDetails = params.locationDetails as string;
+    const budget = params.budget as string;
+    const reviewScore = params.reviewScore as number;
 
     if (!city) {
       throw new Error("Missing required parameter: city");
@@ -147,31 +214,50 @@ export class JobProcessor extends WorkerHost {
 
     this.logger.log("Processing research_hotel job with params:", params);
 
-    const prompt = `You are a travel research assistant. Find and return hotel recommendations for ${city}${nights ? ` for ${nights} nights` : ""}.
-Return ONLY valid JSON with this exact structure:
-{
+    const locationDetailsPrompt = locationDetails
+      ? ` in address ${locationDetails}`
+      : "";
+    const budgetPrompt = budget ? ` with ${budget} budget` : "";
+    const reviewScorePrompt = reviewScore
+      ? ` with review score of ${reviewScore}`
+      : "";
+
+    const fallbackPrompt = `You are a travel research assistant in VietNam. Find google maps and return hotel recommendations for ${city} ${nights}${locationDetailsPrompt}${budgetPrompt}${reviewScorePrompt}.
+Return ONLY valid JSON with this exact structure: {
   "hotels": [
     {
       "name": "Hotel Name",
       "price": "price per night",
       "rating": "rating out of 5",
       "amenities": ["amenity1", "amenity2"],
-      "location": "specific area in city"
+      "location": "specific area in city",
+      "address": "address of the hotel",
+      "link_google_maps": "link to the hotel on google maps",
+
     }
   ]
 }`;
+
+    console.log("fallbackPrompt", fallbackPrompt);
+
+    const prompt = await this.renderPrompt(
+      "research_hotel",
+      params,
+      fallbackPrompt,
+    );
 
     const { text, usage, model } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.3,
       maxTokens: 2000,
     });
-
+    console.log("text", text);
     // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
+      const cleanedText = this.stripMarkdownCodeBlocks(text);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(cleanedText);
       parsedData = parsed as Record<string, unknown>;
     } catch (error) {
       this.logger.error("Failed to parse LLM response as JSON:", {
@@ -209,7 +295,7 @@ Return ONLY valid JSON with this exact structure:
 
     this.logger.log("Processing find_food job with params:", params);
 
-    const prompt = `You are a travel research assistant. Find and return restaurant recommendations for ${city}${cuisine ? ` specializing in ${cuisine} cuisine` : ""}${budget ? ` with ${budget} budget` : ""}.
+    const fallbackPrompt = `You are a travel research assistant. Find and return restaurant recommendations for ${city}${cuisine ? ` specializing in ${cuisine} cuisine` : ""}${budget ? ` with ${budget} budget` : ""}.
 Return ONLY valid JSON with this exact structure:
 {
   "restaurants": [
@@ -225,6 +311,8 @@ Return ONLY valid JSON with this exact structure:
   ]
 }`;
 
+    const prompt = await this.renderPrompt("find_food", params, fallbackPrompt);
+
     const { text, usage, model } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.4,
@@ -234,8 +322,9 @@ Return ONLY valid JSON with this exact structure:
     // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
+      const cleanedText = this.stripMarkdownCodeBlocks(text);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(cleanedText);
       parsedData = parsed as Record<string, unknown>;
     } catch (error) {
       this.logger.error("Failed to parse LLM response as JSON:", {
@@ -273,7 +362,7 @@ Return ONLY valid JSON with this exact structure:
 
     this.logger.log("Processing find_attraction job with params:", params);
 
-    const prompt = `You are a travel research assistant. Find and return tourist attraction recommendations for ${city}${category ? ` in the ${category} category` : ""}${duration ? ` suitable for ${duration} visits` : ""}.
+    const fallbackPrompt = `You are a travel research assistant. Find and return tourist attraction recommendations for ${city}${category ? ` in the ${category} category` : ""}${duration ? ` suitable for ${duration} visits` : ""}.
 Return ONLY valid JSON with this exact structure:
 {
   "attractions": [
@@ -290,6 +379,12 @@ Return ONLY valid JSON with this exact structure:
   ]
 }`;
 
+    const prompt = await this.renderPrompt(
+      "find_attraction",
+      params,
+      fallbackPrompt,
+    );
+
     const { text, usage, model } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.4,
@@ -299,8 +394,9 @@ Return ONLY valid JSON with this exact structure:
     // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
+      const cleanedText = this.stripMarkdownCodeBlocks(text);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(cleanedText);
       parsedData = parsed as Record<string, unknown>;
     } catch (error) {
       this.logger.error("Failed to parse LLM response as JSON:", {

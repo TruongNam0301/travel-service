@@ -15,6 +15,7 @@ import { CreateJobDto } from "../dto/jobs/create-job.dto";
 import { UpdateJobDto } from "../dto/jobs/update-job.dto";
 import { QueryJobsDto } from "../dto/jobs/query-jobs.dto";
 import { PlansService } from "./plans.service";
+import { JobTypesService } from "./job-types.service";
 import { PaginatedResponse } from "../common/dto/paginated-response.dto";
 
 interface JobStateUpdate {
@@ -39,6 +40,7 @@ export class JobsService {
     @InjectQueue("research-jobs")
     private readonly researchQueue: Queue,
     private readonly plansService: PlansService,
+    private readonly jobTypesService: JobTypesService,
   ) {}
 
   /**
@@ -60,6 +62,9 @@ export class JobsService {
       });
       throw new NotFoundException(`Plan with id ${planId} not found`);
     }
+
+    // Validate job parameters before creating entity
+    this.jobTypesService.validate(createJobDto.type, createJobDto.params || {});
 
     this.logger.log({
       action: "create_job",

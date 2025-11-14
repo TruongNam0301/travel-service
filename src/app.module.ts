@@ -13,6 +13,7 @@ import { JobsModule } from "./modules/jobs.module";
 import { ConversationsModule } from "./modules/conversations.module";
 import { MessagesModule } from "./modules/messages.module";
 import { LlmModule } from "./modules/llm.module";
+import { PromptTemplatesModule } from "./modules/prompt-templates.module";
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { LlmModule } from "./modules/llm.module";
     ConversationsModule,
     MessagesModule,
     LlmModule,
+    PromptTemplatesModule,
   ],
   providers: [
     // Global exception filter

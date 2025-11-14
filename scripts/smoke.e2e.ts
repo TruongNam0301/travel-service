@@ -110,7 +110,7 @@ async function pollJobUntilComplete(
 ): Promise<JobResponse> {
   for (let i = 0; i < maxAttempts; i++) {
     const job = await api<JobResponse>(`/jobs/${jobId}`, {}, token);
-    if (job.state === "COMPLETED" || job.state === "FAILED") {
+    if (job.state === "completed" || job.state === "failed") {
       return job;
     }
     await sleep(intervalMs);
@@ -144,7 +144,11 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
   // 1.1 Register new user
   await api("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+    body: JSON.stringify({
+      email: EMAIL,
+      password: PASSWORD,
+      name: "Smoke Test User",
+    }),
   });
   console.log("  ✓ User registration successful");
 
@@ -247,15 +251,20 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
   assert(!!hotelJob.id, "Hotel job should have ID");
   assert(hotelJob.type === "research_hotel", "Job type should match");
   assert(
-    hotelJob.state === "QUEUED" || hotelJob.state === "PENDING",
+    hotelJob.state === "queued" || hotelJob.state === "pending",
     "Job should be queued or pending",
   );
   console.log(`  ✓ Hotel research job created: ${hotelJob.id}`);
 
   // Poll until complete
   const completedHotelJob = await pollJobUntilComplete(hotelJob.id, token);
+  if (completedHotelJob.state === "failed") {
+    throw new Error(
+      `Hotel job failed: ${completedHotelJob.error || "Unknown error"}`,
+    );
+  }
   assert(
-    completedHotelJob.state === "COMPLETED",
+    completedHotelJob.state === "completed",
     `Hotel job should complete (got: ${completedHotelJob.state})`,
   );
   assert(!!completedHotelJob.result, "Hotel job should have result");
@@ -296,7 +305,7 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
 
   const completedFoodJob = await pollJobUntilComplete(foodJob.id, token);
   assert(
-    completedFoodJob.state === "COMPLETED",
+    completedFoodJob.state === "completed",
     `Food job should complete (got: ${completedFoodJob.state})`,
   );
   assert(
@@ -334,7 +343,7 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
     token,
   );
   assert(
-    completedAttractionJob.state === "COMPLETED",
+    completedAttractionJob.state === "completed",
     `Attraction job should complete (got: ${completedAttractionJob.state})`,
   );
   assert(
@@ -368,12 +377,12 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
 
   // 6.2 Filter jobs by state
   const completedJobsList = await api<PaginatedResponse<JobResponse>>(
-    `/plans/${planId}/jobs?state=COMPLETED`,
+    `/plans/${planId}/jobs?state=completed`,
     {},
     token,
   );
   assert(
-    completedJobsList.data.every((j) => j.state === "COMPLETED"),
+    completedJobsList.data.every((j) => j.state === "completed"),
     "All jobs should be completed",
   );
   console.log(
@@ -415,7 +424,7 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
     token,
   );
   assert(
-    cancelledJob.state === "CANCELLED",
+    cancelledJob.state === "cancelled",
     `Job should be cancelled (got: ${cancelledJob.state})`,
   );
   console.log("  ✓ Job cancelled successfully");
@@ -605,7 +614,11 @@ function assertExists<T>(value: T | undefined | null, name: string): T {
   const otherEmail = `other_${Date.now()}@wandermind.dev`;
   await api("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email: otherEmail, password: PASSWORD }),
+    body: JSON.stringify({
+      email: otherEmail,
+      password: PASSWORD,
+      name: "Other Test User",
+    }),
   });
   const otherLogin = await api<AuthResponse>("/auth/login", {
     method: "POST",
