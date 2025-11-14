@@ -15,7 +15,7 @@ export enum MessageRole {
 }
 
 @Entity("messages")
-@Index(["conversationId", "createdAt", "id"])
+@Index(["conversationId", "isDeleted", "createdAt", "id"])
 export class Message {
   @PrimaryGeneratedColumn("uuid")
   id: string;

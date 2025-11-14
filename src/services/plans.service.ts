@@ -1,7 +1,7 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
+  ConflictException,
   Logger,
   Inject,
   forwardRef,
@@ -79,6 +79,21 @@ export class PlansService {
       return savedPlan;
     } catch (err) {
       await queryRunner.rollbackTransaction();
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const isPostgresError = err && typeof err === "object" && "code" in err;
+
+      if (isPostgresError && (err as { code: string }).code === "23505") {
+        this.logger.error({
+          action: "plan_creation_failed_unique_constraint",
+          userId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw new ConflictException(
+          "A default conversation already exists for this plan",
+        );
+      }
+
       this.logger.error({
         action: "plan_creation_failed",
         userId,
@@ -170,7 +185,7 @@ export class PlansService {
         planId,
         ownerId: plan.userId,
       });
-      throw new ForbiddenException("You do not have access to this plan");
+      throw new NotFoundException(`Plan with id ${planId} not found`);
     }
 
     // Don't return soft-deleted plans unless explicitly requested

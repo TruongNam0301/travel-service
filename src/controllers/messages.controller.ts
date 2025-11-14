@@ -15,6 +15,7 @@ import { MessagesService } from "../services/messages.service";
 import { CreateMessageDto } from "../dto/messages/create-message.dto";
 import { QueryMessagesDto } from "../dto/messages/query-messages.dto";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { UserThrottlerGuard } from "../common/guards/user-throttler.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { User } from "../entities/user.entity";
 import { Message } from "../entities/message.entity";
@@ -27,7 +28,8 @@ export class MessagesController {
 
   @Post(":id/messages")
   @HttpCode(HttpStatus.CREATED)
-  @Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 requests per minute
+  @UseGuards(UserThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60000 } }) // 60 requests per minute per user
   async create(
     @CurrentUser() user: User,
     @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,

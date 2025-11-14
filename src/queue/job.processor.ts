@@ -1,9 +1,10 @@
-import { Processor, WorkerHost, OnWorkerEvent } from "@nestjs/bullmq";
-import { Logger, Inject, forwardRef } from "@nestjs/common";
+import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
+import { Inject, Logger, forwardRef } from "@nestjs/common";
 import { Job } from "bullmq";
+import * as llmClient_1 from "src/common/services/llm/llm.client";
 import { JobState } from "../entities/job.entity";
 import { JobsService } from "../services/jobs.service";
-import { JobData, JobResult, HotelParams } from "../shared/types/job.type";
+import { JobData, JobResult } from "../shared/types/job.type";
 
 /**
  * Research Jobs Processor
@@ -17,6 +18,8 @@ export class JobProcessor extends WorkerHost {
   constructor(
     @Inject(forwardRef(() => JobsService))
     private readonly jobsService: JobsService,
+    @Inject(llmClient_1.LLM_CLIENT)
+    private readonly llmClient: llmClient_1.LlmClient,
   ) {
     super();
   }
@@ -132,37 +135,63 @@ export class JobProcessor extends WorkerHost {
     });
   }
 
-  // Placeholder methods for specific job types
   private async processResearchHotel(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
+    const city = params.city as string;
+    const nights = params.nights as number;
+
+    if (!city) {
+      throw new Error("Missing required parameter: city");
+    }
+
     this.logger.log("Processing research_hotel job with params:", params);
 
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const prompt = `You are a travel research assistant. Find and return hotel recommendations for ${city}${nights ? ` for ${nights} nights` : ""}.
+Return ONLY valid JSON with this exact structure:
+{
+  "hotels": [
+    {
+      "name": "Hotel Name",
+      "price": "price per night",
+      "rating": "rating out of 5",
+      "amenities": ["amenity1", "amenity2"],
+      "location": "specific area in city"
+    }
+  ]
+}`;
 
-    const hotelParams = params as HotelParams;
-    const location = hotelParams.location ?? "Unknown";
+    const { text, usage, model } = await this.llmClient.generate(prompt, {
+      jobId: params.jobId as string,
+      temperature: 0.3,
+      maxTokens: 2000,
+    });
 
-    // TODO: Implement hotel research logic with LLM
+    // Parse JSON safely
+    let parsedData: Record<string, unknown>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parsed = JSON.parse(text);
+      parsedData = parsed as Record<string, unknown>;
+    } catch (error) {
+      this.logger.error("Failed to parse LLM response as JSON:", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        text: text.substring(0, 200),
+      });
+      throw new Error(
+        `Failed to parse JSON from LLM response: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+
     return {
       success: true,
       jobType: "research_hotel",
-      data: {
-        hotels: [
-          {
-            name: "Sample Hotel",
-            location,
-            rating: 4.5,
-            price: 100,
-          },
-        ],
-      },
-      summary: `Found hotels in ${location}`,
+      data: parsedData,
+      summary: `Found ${(parsedData?.hotels as unknown[])?.length ?? 0} hotels in ${city}`,
       meta: {
         createdAt: new Date().toISOString(),
-        model: "placeholder",
-        tokensUsed: 0,
+        model: model ?? "unknown",
+        tokensUsed: usage?.total ?? 0,
       },
     };
   }
@@ -170,23 +199,63 @@ export class JobProcessor extends WorkerHost {
   private async processFindFood(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
+    const city = params.city as string;
+    const cuisine = params.cuisine as string;
+    const budget = params.budget as string;
+
+    if (!city) {
+      throw new Error("Missing required parameter: city");
+    }
+
     this.logger.log("Processing find_food job with params:", params);
 
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const prompt = `You are a travel research assistant. Find and return restaurant recommendations for ${city}${cuisine ? ` specializing in ${cuisine} cuisine` : ""}${budget ? ` with ${budget} budget` : ""}.
+Return ONLY valid JSON with this exact structure:
+{
+  "restaurants": [
+    {
+      "name": "Restaurant Name",
+      "cuisine": "cuisine type",
+      "priceRange": "$ or $$ or $$$ or $$$$",
+      "rating": "rating out of 5",
+      "specialties": ["dish1", "dish2"],
+      "location": "specific area in city",
+      "description": "brief description"
+    }
+  ]
+}`;
 
-    // TODO: Implement food search logic with LLM
+    const { text, usage, model } = await this.llmClient.generate(prompt, {
+      jobId: params.jobId as string,
+      temperature: 0.4,
+      maxTokens: 2000,
+    });
+
+    // Parse JSON safely
+    let parsedData: Record<string, unknown>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parsed = JSON.parse(text);
+      parsedData = parsed as Record<string, unknown>;
+    } catch (error) {
+      this.logger.error("Failed to parse LLM response as JSON:", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        text: text.substring(0, 200),
+      });
+      throw new Error(
+        `Failed to parse JSON from LLM response: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+
     return {
       success: true,
       jobType: "find_food",
-      data: {
-        restaurants: [],
-      },
-      summary: "Found restaurants",
+      data: parsedData,
+      summary: `Found ${(parsedData?.restaurants as unknown[])?.length ?? 0} restaurants in ${city}`,
       meta: {
         createdAt: new Date().toISOString(),
-        model: "placeholder",
-        tokensUsed: 0,
+        model: model ?? "unknown",
+        tokensUsed: usage?.total ?? 0,
       },
     };
   }
@@ -194,23 +263,64 @@ export class JobProcessor extends WorkerHost {
   private async processFindAttraction(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
+    const city = params.city as string;
+    const category = params.category as string;
+    const duration = params.duration as string;
+
+    if (!city) {
+      throw new Error("Missing required parameter: city");
+    }
+
     this.logger.log("Processing find_attraction job with params:", params);
 
-    // Simulate processing time
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const prompt = `You are a travel research assistant. Find and return tourist attraction recommendations for ${city}${category ? ` in the ${category} category` : ""}${duration ? ` suitable for ${duration} visits` : ""}.
+Return ONLY valid JSON with this exact structure:
+{
+  "attractions": [
+    {
+      "name": "Attraction Name",
+      "category": "category type (museum, park, historical, etc.)",
+      "rating": "rating out of 5",
+      "estimatedDuration": "typical visit duration",
+      "entryFee": "entry fee or 'Free'",
+      "location": "specific area in city",
+      "highlights": ["highlight1", "highlight2"],
+      "description": "brief description"
+    }
+  ]
+}`;
 
-    // TODO: Implement attraction search logic with LLM
+    const { text, usage, model } = await this.llmClient.generate(prompt, {
+      jobId: params.jobId as string,
+      temperature: 0.4,
+      maxTokens: 2000,
+    });
+
+    // Parse JSON safely
+    let parsedData: Record<string, unknown>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const parsed = JSON.parse(text);
+      parsedData = parsed as Record<string, unknown>;
+    } catch (error) {
+      this.logger.error("Failed to parse LLM response as JSON:", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        text: text.substring(0, 200),
+      });
+      throw new Error(
+        `Failed to parse JSON from LLM response: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
+
     return {
       success: true,
       jobType: "find_attraction",
-      data: {
-        attractions: [],
-      },
-      summary: "Found attractions",
+      data: parsedData,
+      summary: `Found ${(parsedData?.attractions as unknown[])?.length ?? 0} attractions in ${city}`,
       meta: {
         createdAt: new Date().toISOString(),
-        model: "placeholder",
-        tokensUsed: 0,
+        model: model ?? "unknown",
+        tokensUsed: usage?.total ?? 0,
       },
     };
   }

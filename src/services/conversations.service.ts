@@ -79,17 +79,9 @@ export class ConversationsService {
     } catch (error: unknown) {
       // Handle unique constraint violation (PG error code 23505)
       const isPostgresError =
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        "constraint" in error;
+        error && typeof error === "object" && "code" in error;
 
-      if (
-        isPostgresError &&
-        (error as { code: string }).code === "23505" &&
-        (error as { constraint: string }).constraint ===
-          "ux_conversations_plan_default"
-      ) {
+      if (isPostgresError && (error as { code: string }).code === "23505") {
         throw new ConflictException(
           "A default conversation already exists for this plan",
         );
@@ -112,22 +104,35 @@ export class ConversationsService {
       isDefault: dto.isDefault,
     });
 
-    const conversation = manager.create(Conversation, {
-      ...dto,
-      planId,
-      messageCount: 0,
-      isDeleted: false,
-    });
+    try {
+      const conversation = manager.create(Conversation, {
+        ...dto,
+        planId,
+        messageCount: 0,
+        isDeleted: false,
+      });
 
-    const savedConversation = await manager.save(Conversation, conversation);
+      const savedConversation = await manager.save(Conversation, conversation);
 
-    this.logger.log({
-      action: "conversation_created_with_manager",
-      planId,
-      conversationId: savedConversation.id,
-    });
+      this.logger.log({
+        action: "conversation_created_with_manager",
+        planId,
+        conversationId: savedConversation.id,
+      });
 
-    return savedConversation;
+      return savedConversation;
+    } catch (error: unknown) {
+      // Handle unique constraint violation (PG error code 23505)
+      const isPostgresError =
+        error && typeof error === "object" && "code" in error;
+
+      if (isPostgresError && (error as { code: string }).code === "23505") {
+        throw new ConflictException(
+          "A default conversation already exists for this plan",
+        );
+      }
+      throw error;
+    }
   }
 
   /**

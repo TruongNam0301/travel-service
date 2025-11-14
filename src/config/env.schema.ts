@@ -51,6 +51,14 @@ export const envSchema = z.object({
   [JWT_CONSTANTS.ENV_KEYS.JWT_AUDIENCE]: z
     .string()
     .default(JWT_CONSTANTS.DEFAULT_AUDIENCE),
+
+  // LLM
+  LLM_API_KEY: z.string().min(1, "LLM_API_KEY required"),
+  LLM_MODEL: z.string().default("gpt-4o-mini"),
+  LLM_EMBED_MODEL: z.string().default("text-embedding-3-small"),
+  LLM_TIMEOUT_MS: z.coerce.number().default(30000),
+  LLM_MAX_RETRIES: z.coerce.number().default(2),
+  LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

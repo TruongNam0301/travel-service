@@ -12,6 +12,7 @@ import { PlansModule } from "./modules/plans.module";
 import { JobsModule } from "./modules/jobs.module";
 import { ConversationsModule } from "./modules/conversations.module";
 import { MessagesModule } from "./modules/messages.module";
+import { LlmModule } from "./modules/llm.module";
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { MessagesModule } from "./modules/messages.module";
     JobsModule,
     ConversationsModule,
     MessagesModule,
+    LlmModule,
   ],
   providers: [
     // Global exception filter

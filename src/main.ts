@@ -4,6 +4,7 @@ import { ValidationPipe, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import { Logger as PinoLogger } from "nestjs-pino";
+import { json } from "express";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -16,6 +17,9 @@ async function bootstrap() {
 
     // Use Pino logger
     app.useLogger(app.get(PinoLogger));
+
+    // Request body size limit (12kb to enforce 10k content rule)
+    app.use(json({ limit: "12kb" }));
 
     // Get ConfigService
     const configService = app.get(ConfigService);

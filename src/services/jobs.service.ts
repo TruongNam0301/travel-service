@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
   InternalServerErrorException,
   Logger,
@@ -59,7 +58,7 @@ export class JobsService {
         userId,
         planId,
       });
-      throw new ForbiddenException("You do not have access to this plan");
+      throw new NotFoundException(`Plan with id ${planId} not found`);
     }
 
     this.logger.log({
@@ -147,7 +146,7 @@ export class JobsService {
     // Verify plan ownership
     const hasAccess = await this.plansService.verifyOwnership(planId, userId);
     if (!hasAccess) {
-      throw new ForbiddenException("You do not have access to this plan");
+      throw new NotFoundException(`Plan with id ${planId} not found`);
     }
 
     const {
@@ -221,7 +220,7 @@ export class JobsService {
         jobId,
         ownerId: job.plan.userId,
       });
-      throw new ForbiddenException("You do not have access to this job");
+      throw new NotFoundException(`Job with id ${jobId} not found`);
     }
 
     return job;
