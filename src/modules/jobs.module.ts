@@ -10,6 +10,7 @@ import { QueueModule } from "../queue/queue.module";
 import { JobProcessor } from "../queue/job.processor";
 import { LlmModule } from "./llm.module";
 import { PromptTemplatesModule } from "./prompt-templates.module";
+import { MemoryCompressionModule } from "./memory-compression.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PromptTemplatesModule } from "./prompt-templates.module";
     QueueModule,
     LlmModule,
     PromptTemplatesModule,
+    MemoryCompressionModule,
   ],
   controllers: [JobsController],
   providers: [JobsService, JobTypesService, JobProcessor],

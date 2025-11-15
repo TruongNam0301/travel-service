@@ -14,6 +14,8 @@ import { ConversationsModule } from "./modules/conversations.module";
 import { MessagesModule } from "./modules/messages.module";
 import { LlmModule } from "./modules/llm.module";
 import { PromptTemplatesModule } from "./modules/prompt-templates.module";
+import { EmbeddingsModule } from "./modules/embeddings.module";
+import { MemoryCompressionModule } from "./modules/memory-compression.module";
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { PromptTemplatesModule } from "./modules/prompt-templates.module";
     MessagesModule,
     LlmModule,
     PromptTemplatesModule,
+    EmbeddingsModule,
+    MemoryCompressionModule,
   ],
   providers: [
     // Global exception filter

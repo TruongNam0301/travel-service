@@ -1,11 +1,9 @@
-// Lightweight LLM interface (generation + embeddings)
-// Acts as a thin contract so any provider (OpenAI, etc.) can be swapped in.
 export type LlmGenerateOpts = {
   system?: string;
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
-  jobId?: string; // for log correlation
+  jobId?: string;
 };
 
 export type LlmGenerateResult = {

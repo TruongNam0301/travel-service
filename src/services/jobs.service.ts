@@ -52,16 +52,8 @@ export class JobsService {
     userId: string,
     createJobDto: CreateJobDto,
   ): Promise<Job> {
-    // Verify plan ownership
-    const hasAccess = await this.plansService.verifyOwnership(planId, userId);
-    if (!hasAccess) {
-      this.logger.warn({
-        action: "unauthorized_job_creation",
-        userId,
-        planId,
-      });
-      throw new NotFoundException(`Plan with id ${planId} not found`);
-    }
+    // Verify plan ownership (throws if not owner)
+    await this.plansService.verifyOwnership(planId, userId);
 
     // Validate job parameters before creating entity
     this.jobTypesService.validate(createJobDto.type, createJobDto.params || {});
@@ -148,11 +140,8 @@ export class JobsService {
     userId: string,
     query: QueryJobsDto,
   ): Promise<PaginatedResponse<Job>> {
-    // Verify plan ownership
-    const hasAccess = await this.plansService.verifyOwnership(planId, userId);
-    if (!hasAccess) {
-      throw new NotFoundException(`Plan with id ${planId} not found`);
-    }
+    // Verify plan ownership (throws if not owner)
+    await this.plansService.verifyOwnership(planId, userId);
 
     const {
       page = 1,

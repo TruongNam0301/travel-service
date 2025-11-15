@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   Index,
@@ -12,6 +13,7 @@ import { Plan } from "./plan.entity";
 @Entity("embeddings")
 @Index(["planId", "createdAt"])
 @Index(["planId", "refType"])
+@Index(["planId", "refType", "refId"])
 export class Embedding {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -20,24 +22,37 @@ export class Embedding {
   planId!: string;
 
   // pgvector column - will be created as vector(1536) in migration
-  // TypeORM doesn't have native support for pgvector, so we use a custom type
+  // TypeORM accepts number[] and pgvector handles the conversion
   @Column({
     type: "vector",
     nullable: false,
   })
-  vector!: string; // Will be handled as vector type in PostgreSQL
+  vector!: number[]; // pgvector accepts number[] directly
 
   @Column({ name: "ref_type", type: "varchar", length: 50 })
   refType!: string;
 
-  @Column({ name: "ref_id", type: "uuid" })
-  refId!: string;
+  @Column({ name: "ref_id", type: "uuid", nullable: true })
+  refId!: string | null;
 
   @Column({ type: "text" })
   content!: string;
 
+  // Soft delete fields
+  @Column({ name: "is_deleted", type: "boolean", default: false })
+  isDeleted!: boolean;
+
+  @Column({ name: "deleted_at", type: "timestamptz", nullable: true })
+  deletedAt?: Date;
+
+  @Column({ name: "deleted_by", type: "uuid", nullable: true })
+  deletedBy?: string;
+
   @CreateDateColumn({ name: "created_at", type: "timestamptz" })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
+  updatedAt!: Date;
 
   // Relations
   @ManyToOne(() => Plan, (plan) => plan.embeddings)

@@ -36,14 +36,8 @@ export class ConversationsService {
     planId: string,
     dto: CreateConversationDto,
   ): Promise<Conversation> {
-    // Verify plan ownership
-    const hasOwnership = await this.plansService.verifyOwnership(
-      planId,
-      userId,
-    );
-    if (!hasOwnership) {
-      throw new NotFoundException(`Plan with id ${planId} not found`);
-    }
+    // Verify plan ownership (throws if not owner)
+    await this.plansService.verifyOwnership(planId, userId);
 
     this.logger.log({
       action: "create_conversation",
@@ -145,14 +139,7 @@ export class ConversationsService {
   ): Promise<
     PaginatedResponse<Conversation & { lastMessagePreview?: string }>
   > {
-    // Verify plan ownership first
-    const hasOwnership = await this.plansService.verifyOwnership(
-      planId,
-      userId,
-    );
-    if (!hasOwnership) {
-      throw new NotFoundException(`Plan with id ${planId} not found`);
-    }
+    await this.plansService.verifyOwnership(planId, userId);
 
     const {
       page = 1,

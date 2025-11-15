@@ -83,14 +83,6 @@ export class OpenAiClient implements LlmClient {
     };
 
     const latencyMs = Date.now() - start;
-    this.log.log({
-      action: "llm.call",
-      provider: "openai",
-      model: json.model,
-      latencyMs,
-      usage,
-      jobId: opts.jobId,
-    });
 
     return { text, usage, model: json.model, latencyMs, provider: "openai" };
   }
@@ -111,14 +103,6 @@ export class OpenAiClient implements LlmClient {
     );
     const json = (await res.json()) as OpenAIEmbeddingResponse;
 
-    this.log.log({
-      action: "llm.embed",
-      provider: "openai",
-      model: json.model,
-      count: json.data?.length ?? 0,
-      jobId: opts?.jobId,
-    });
-
     return json.data.map((d) => d.embedding);
   }
 
@@ -128,7 +112,6 @@ export class OpenAiClient implements LlmClient {
     timeoutMs: number,
     jobId?: string,
   ): Promise<Response> {
-    // Normalize URL: remove trailing slash from baseUrl, ensure single slash before path
     const baseUrlNormalized = this.baseUrl.replace(/\/+$/, "");
     const pathNormalized = path.replace(/^\/+/, "");
     const url = `${baseUrlNormalized}/${pathNormalized}`;
@@ -154,22 +137,12 @@ export class OpenAiClient implements LlmClient {
         clearTimeout(timer);
 
         if (!res.ok) {
-          // Clone response before reading to avoid consuming the body
           const clonedRes = res.clone();
           const text = await clonedRes.text().catch(() => "");
-          // Retry on 429/5xx
           if (res.status === 429 || res.status >= 500) {
             throw new Error(`OpenAI HTTP ${res.status}: ${text}`);
           }
-          // Non-retryable - throw error instead of returning response
-          this.log.warn({
-            action: "llm.http_error",
-            status: res.status,
-            jobId,
-            path,
-            url,
-            text: text.substring(0, 200), // Limit error text length
-          });
+
           throw new Error(
             `OpenAI HTTP ${res.status}: ${text.substring(0, 200)}`,
           );
@@ -179,17 +152,8 @@ export class OpenAiClient implements LlmClient {
       } catch (err: any) {
         clearTimeout(timer);
         lastErr = err as Error;
-        this.log.warn({
-          action: "llm.retry",
-          attempt,
-          maxRetries: this.maxRetries,
-          reason: String((err as Error)?.message ?? err),
-          jobId,
-          path,
-          url,
-        });
+
         if (attempt === this.maxRetries) break;
-        // simple exponential backoff
         await sleep(300 * Math.pow(2, attempt));
         attempt++;
       }

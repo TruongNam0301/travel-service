@@ -59,6 +59,17 @@ export const envSchema = z.object({
   LLM_TIMEOUT_MS: z.coerce.number().default(30000),
   LLM_MAX_RETRIES: z.coerce.number().default(2),
   LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
+
+  // Vector Search
+  VECTOR_SEARCH_MODE: z.enum(["cosine", "hnsw"]).default("hnsw"),
+  VECTOR_HNSW_M: z.coerce.number().default(16),
+  VECTOR_HNSW_EF_CONSTRUCTION: z.coerce.number().default(64),
+
+  // Memory Compression
+  MEMORY_COMPRESSION_ENABLED: z.coerce.boolean().optional(),
+  MEMORY_COMPRESSION_DEFAULT_MODE: z.enum(["light", "full"]).optional(),
+  MEMORY_COMPRESSION_SIMILARITY: z.coerce.number().min(0).max(1).optional(),
+  MEMORY_RETENTION_DAYS: z.coerce.number().min(1).optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

@@ -261,16 +261,30 @@ export class PlansService {
 
   /**
    * Verify plan ownership (used by other services)
+   * Throws NotFoundException if plan doesn't exist or user doesn't own it
    */
-  async verifyOwnership(planId: string, userId: string): Promise<boolean> {
+  async verifyOwnership(planId: string, userId: string): Promise<void> {
     const plan = await this.plansRepository.findOne({
       where: { id: planId },
     });
 
     if (!plan) {
-      return false;
+      throw new NotFoundException(`Plan with id ${planId} not found`);
     }
 
-    return plan.userId === userId;
+    if (plan.userId !== userId) {
+      this.logger.warn({
+        action: "unauthorized_plan_access",
+        userId,
+        planId,
+        ownerId: plan.userId,
+      });
+      throw new NotFoundException(`Plan with id ${planId} not found`);
+    }
+
+    // Don't allow access to soft-deleted plans
+    if (plan.isDeleted) {
+      throw new NotFoundException(`Plan with id ${planId} not found`);
+    }
   }
 }

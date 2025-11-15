@@ -9,6 +9,7 @@ import {
   PromptTemplatesService,
   PromptTemplateError,
 } from "../services/prompt-templates.service";
+import { MemoryCompressionService } from "../services/memory-compression.service";
 
 /**
  * Research Jobs Processor
@@ -25,6 +26,7 @@ export class JobProcessor extends WorkerHost {
     @Inject(llmClient_1.LLM_CLIENT)
     private readonly llmClient: llmClient_1.LlmClient,
     private readonly promptTemplatesService: PromptTemplatesService,
+    private readonly memoryCompressionService: MemoryCompressionService,
   ) {
     super();
   }
@@ -51,6 +53,9 @@ export class JobProcessor extends WorkerHost {
           break;
         case "find_attraction":
           result = await this.processFindAttraction(params);
+          break;
+        case "memory_compression":
+          result = await this.processMemoryCompression(params);
           break;
         default:
           this.logger.warn(`Unknown job type: ${type}`);
@@ -319,18 +324,11 @@ Return ONLY valid JSON with this exact structure:
       maxTokens: 2000,
     });
 
-    // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
       const cleanedText = this.stripMarkdownCodeBlocks(text);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const parsed = JSON.parse(cleanedText);
-      parsedData = parsed as Record<string, unknown>;
+      parsedData = JSON.parse(cleanedText) as Record<string, unknown>;
     } catch (error) {
-      this.logger.error("Failed to parse LLM response as JSON:", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        text: text.substring(0, 200),
-      });
       throw new Error(
         `Failed to parse JSON from LLM response: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
@@ -417,6 +415,52 @@ Return ONLY valid JSON with this exact structure:
         createdAt: new Date().toISOString(),
         model: model ?? "unknown",
         tokensUsed: usage?.total ?? 0,
+      },
+    };
+  }
+
+  private async processMemoryCompression(
+    params: Record<string, unknown>,
+  ): Promise<JobResult> {
+    const planId = params.planId as string;
+    const mode = params.mode as "light" | "full";
+    const userId = params.userId as string | undefined;
+    const dryRun = params.dryRun as boolean | undefined;
+
+    if (!planId) {
+      throw new Error("Missing required parameter: planId");
+    }
+
+    if (!mode || (mode !== "light" && mode !== "full")) {
+      throw new Error(
+        "Missing or invalid parameter: mode (must be 'light' or 'full')",
+      );
+    }
+
+    this.logger.log("Processing memory_compression job with params:", {
+      planId,
+      mode,
+      userId: userId ?? null,
+      dryRun: dryRun ?? false,
+    });
+
+    const compressionResult =
+      await this.memoryCompressionService.compressPlanMemory(
+        planId,
+        mode,
+        userId,
+        { dryRun },
+      );
+
+    return {
+      success: true,
+      jobType: "memory_compression",
+      data: compressionResult as unknown as Record<string, unknown>,
+      summary: `Compressed ${compressionResult.beforeCount} embeddings to ${compressionResult.afterCount} (ratio: ${compressionResult.compressionRatio.toFixed(2)})`,
+      meta: {
+        createdAt: new Date().toISOString(),
+        model: "memory-compression",
+        tokensUsed: 0,
       },
     };
   }

@@ -20,11 +20,17 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { User } from "../entities/user.entity";
 import { Plan } from "../entities/plan.entity";
 import { PaginatedResponse } from "../common/dto/paginated-response.dto";
+import { MemoryCompressionService } from "../services/memory-compression.service";
+import { CompressionDiagnostics } from "../shared/types/memory-compression.type";
+import { ParseUUIDPipe } from "@nestjs/common";
 
 @Controller("plans")
 @UseGuards(JwtAuthGuard)
 export class PlansController {
-  constructor(private readonly plansService: PlansService) {}
+  constructor(
+    private readonly plansService: PlansService,
+    private readonly memoryCompressionService: MemoryCompressionService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -67,5 +73,16 @@ export class PlansController {
     @Param("id") id: string,
   ): Promise<void> {
     await this.plansService.softDelete(id, user.id);
+  }
+
+  @Get(":id/memory/diagnostics")
+  async getMemoryDiagnostics(
+    @CurrentUser() user: User,
+    @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,
+  ): Promise<CompressionDiagnostics> {
+    return await this.memoryCompressionService.getCompressionDiagnostics(
+      id,
+      user.id,
+    );
   }
 }

@@ -31,6 +31,13 @@ export class JobTypesService {
       duration: z.string().optional(),
       reviewScore: z.number().int().positive().optional(),
     }),
+
+    memory_compression: z.object({
+      planId: z.string().uuid("planId must be a valid UUID"),
+      mode: z.enum(["light", "full"], {
+        message: "mode must be either 'light' or 'full'",
+      }),
+    }),
   };
 
   /**

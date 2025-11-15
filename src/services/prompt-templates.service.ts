@@ -44,7 +44,6 @@ export class PromptTemplatesService {
    * Register custom Handlebars helpers for safe defaults and utilities
    */
   private registerHelpers(): void {
-    // Helper for providing default values when a key is missing
     this.handlebars.registerHelper(
       "default",
       function (value: any, defaultValue: any): any {
