@@ -11,6 +11,7 @@ import { JobProcessor } from "../queue/job.processor";
 import { LlmModule } from "./llm.module";
 import { PromptTemplatesModule } from "./prompt-templates.module";
 import { MemoryCompressionModule } from "./memory-compression.module";
+import { ContextBuildersModule } from "./context-builders.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { MemoryCompressionModule } from "./memory-compression.module";
     LlmModule,
     PromptTemplatesModule,
     MemoryCompressionModule,
+    ContextBuildersModule,
   ],
   controllers: [JobsController],
   providers: [JobsService, JobTypesService, JobProcessor],

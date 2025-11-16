@@ -53,8 +53,21 @@ export const MEMORY_COMPRESSION_LOW_VALUE_DAYS = 30;
 /**
  * Number of most recent embeddings to always preserve (never compress)
  * This ensures recent context is never lost
+ * Note: This is a default value, actual value comes from config
  */
-export const MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT = 20;
+export const MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT_DEFAULT = 20;
+
+/**
+ * Minimum number of embeddings required before compression can run
+ * Prevents compression on small datasets where it's not beneficial
+ */
+export const MEMORY_COMPRESSION_MIN_EMBEDDINGS_THRESHOLD_DEFAULT = 50;
+
+/**
+ * Number of days to consider a conversation "active"
+ * Embeddings linked to conversations with messages within this period are protected
+ */
+export const MEMORY_COMPRESSION_ACTIVE_CONVERSATION_DAYS_DEFAULT = 7;
 
 /**
  * Minimum cluster size to generate LLM summary

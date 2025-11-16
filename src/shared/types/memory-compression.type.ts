@@ -25,6 +25,8 @@ export interface CompressionResult {
   clustersMerged?: number;
   embeddingsArchived?: number;
   durationMs: number;
+  skipped?: boolean;
+  skipReason?: string;
 }
 
 /**
@@ -67,6 +69,28 @@ export interface CompressionDiagnostics {
     beforeCount: number;
     afterCount: number;
     compressionRatio: number;
+    timestamp: Date;
+  };
+}
+
+/**
+ * Memory statistics for a plan
+ * Includes current state and last compression history
+ */
+export interface MemoryStats {
+  planId: string;
+  totalEmbeddings: number;
+  archivedEmbeddings: number;
+  activeEmbeddings: number;
+  lastCompression?: {
+    mode: MemoryCompressionMode;
+    beforeCount: number;
+    afterCount: number;
+    compressionRatio: number;
+    duplicatesRemoved?: number;
+    clustersMerged?: number;
+    embeddingsArchived?: number;
+    durationMs: number;
     timestamp: Date;
   };
 }

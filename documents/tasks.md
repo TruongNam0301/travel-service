@@ -61,43 +61,47 @@ This phase focuses on reducing long-term embedding storage size, improving recal
 
 ### **Core Logic**
 
-- [ ] Implement `findRedundantEmbeddings(planId)`
-- [ ] Implement clustering (similarity-based grouping)
-- [ ] Implement embedding merging
-- [ ] Implement summary generation
-- [ ] Implement archival logic
+- [x] Implement `findRedundantEmbeddings(planId)`
+- [x] Implement clustering (similarity-based grouping)
+- [x] Implement embedding merging
+- [x] Implement summary generation
+- [x] Implement archival logic
 
 ### **Service**
 
-- [ ] Create `MemoryCompressionService`
-  - [ ] `compressPlanMemory(planId)`
-  - [ ] `groupSimilarEmbeddings()`
-  - [ ] `mergeCluster()`
-  - [ ] `archiveEmbeddings()`
+- [x] Create `MemoryCompressionService`
+  - [x] `compressPlanMemory(planId)`
+  - [x] `groupSimilarEmbeddings()`
+  - [x] `mergeCluster()`
+  - [x] `archiveEmbeddings()`
 
-- [ ] Integrate with EmbeddingsService
-- [ ] Enforce plan ownership
+- [x] Integrate with EmbeddingsService
+- [x] Enforce plan ownership
 
 ### **Queue Jobs**
 
-- [ ] Add BullMQ job type: `memory_compression`
-- [ ] Add worker for compression
-- [ ] Add retry/backoff logic
+- [x] Add BullMQ job type: `memory_compression`
+- [x] Add worker for compression
+- [x] Add retry/backoff logic
 
 ---
 
 ## **6.3 Memory Compression — Scheduling & Automation**
 
-- [ ] Create CRON schedule
-  - nightly compression
-  - weekly summarization
+- [x] Create CRON schedule
+  - nightly compression (daily at 2 AM UTC)
+  - weekly summarization (Sundays at 3 AM UTC)
 
-- [ ] Add `.env` variables
-  - `MEMORY_COMPRESSION_ENABLED`
-  - `MEMORY_COMPRESSION_INTERVAL`
-  - `MEMORY_ARCHIVE_THRESHOLD`
+- [x] Add `.env` variables
+  - `MEMORY_COMPRESSION_ENABLED` (default: true)
+  - `MEMORY_COMPRESSION_INTERVAL` (default: "0 2 \* \* \*")
+  - `MEMORY_ARCHIVE_THRESHOLD` (default: 1000)
+  - `MEMORY_INACTIVE_PLAN_DAYS` (default: 30)
+  - `MEMORY_COMPRESSION_MIN_EMBEDDINGS_THRESHOLD` (default: 50)
+  - `MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT` (default: 20)
+  - `MEMORY_COMPRESSION_ACTIVE_CONVERSATION_DAYS` (default: 7)
 
-- [ ] Trigger compression when:
+- [x] Trigger compression when:
   - embeddings > threshold
   - plan inactive for long period
 
@@ -105,20 +109,20 @@ This phase focuses on reducing long-term embedding storage size, improving recal
 
 ## **6.4 Metrics, Logging, Observability**
 
-- [ ] Log number of embeddings before/after
-- [ ] Log number merged or archived
-- [ ] Log compression ratio
-- [ ] Emit worker metrics (latency, duration, CPU)
-- [ ] (Optional) Add `/plans/:id/memory/stats` endpoint
+- [x] Log number of embeddings before/after
+- [x] Log number merged or archived
+- [x] Log compression ratio
+- [x] Emit worker metrics (latency, duration, CPU)
+- [x] Add `/plans/:id/memory/stats` endpoint
 
 ---
 
 ## **6.5 Memory Safety**
 
-- [ ] Add DRY-RUN mode (no changes, just stats)
-- [ ] Minimum embeddings threshold before compression
-- [ ] Skip last N “fresh” embeddings
-- [ ] Prevent deletion of active conversation context
+- [x] Add DRY-RUN mode (no changes, just stats)
+- [x] Minimum embeddings threshold before compression
+- [x] Skip last N "fresh" embeddings
+- [x] Prevent deletion of active conversation context
 
 ---
 

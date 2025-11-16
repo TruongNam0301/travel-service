@@ -1,5 +1,6 @@
 import { Module, Global } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { LoggerModule } from "nestjs-pino";
 import { DatabaseModule } from "../database/database.module";
 import { CacheConfigModule } from "./cache.module";
@@ -9,6 +10,8 @@ import databaseConfig from "../config/database.config";
 import redisConfig from "../config/redis.config";
 import queueConfig from "../config/queue.config";
 import appConfig from "../config/app.config";
+import memoryCompressionConfig from "../config/memory-compression.config";
+import contextBuilderConfig from "../config/context-builder.config";
 import { getLoggerConfig } from "../config/logger.config";
 
 /**
@@ -24,12 +27,22 @@ import { getLoggerConfig } from "../config/logger.config";
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      load: [appConfig, databaseConfig, redisConfig, queueConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        redisConfig,
+        queueConfig,
+        memoryCompressionConfig,
+        contextBuilderConfig,
+      ],
       envFilePath: [".env.local", ".env"],
     }),
 
     // Logger with Pino
     LoggerModule.forRoot(getLoggerConfig()),
+
+    // Task Scheduling (CRON jobs)
+    ScheduleModule.forRoot(),
 
     // Database with TypeORM
     DatabaseModule,

@@ -10,6 +10,8 @@ import {
   PromptTemplateError,
 } from "../services/prompt-templates.service";
 import { MemoryCompressionService } from "../services/memory-compression.service";
+import { CompressionResult } from "../shared/types/memory-compression.type";
+import { FinalContextComposer } from "../services/context-builders/final-context-composer.service";
 
 /**
  * Research Jobs Processor
@@ -27,6 +29,7 @@ export class JobProcessor extends WorkerHost {
     private readonly llmClient: llmClient_1.LlmClient,
     private readonly promptTemplatesService: PromptTemplatesService,
     private readonly memoryCompressionService: MemoryCompressionService,
+    private readonly finalContextComposer: FinalContextComposer,
   ) {
     super();
   }
@@ -55,7 +58,7 @@ export class JobProcessor extends WorkerHost {
           result = await this.processFindAttraction(params);
           break;
         case "memory_compression":
-          result = await this.processMemoryCompression(params);
+          result = await this.processMemoryCompression(job, params);
           break;
         default:
           this.logger.warn(`Unknown job type: ${type}`);
@@ -173,6 +176,44 @@ export class JobProcessor extends WorkerHost {
     fallbackPrompt: string,
   ): Promise<string> {
     try {
+      // Build memory context if planId is available
+      let contextPrefix = "";
+      const planId = params.planId as string | undefined;
+      const conversationId = params.conversationId as string | undefined;
+      const query = params.query as string | undefined;
+
+      if (planId) {
+        try {
+          const finalContext = await this.finalContextComposer.composeContext({
+            planId,
+            conversationId,
+            query,
+            includeConversation: !!conversationId,
+            includeEmbeddings: true,
+            includePlan: true,
+          });
+
+          if (finalContext.formatted) {
+            contextPrefix = finalContext.formatted + "\n\n";
+            this.logger.log({
+              action: "prompt.context_added",
+              jobType,
+              planId,
+              conversationId,
+              contextTokens: finalContext.tokenCount,
+            });
+          }
+        } catch (error) {
+          // Log but don't fail - continue without context
+          this.logger.warn({
+            action: "prompt.context_build_failed",
+            jobType,
+            planId,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+
       const context = {
         ...params,
         jobId: params.jobId,
@@ -181,7 +222,9 @@ export class JobProcessor extends WorkerHost {
         jobType,
         context,
       );
-      return rendered;
+
+      // Prepend context if available
+      return contextPrefix + rendered;
     } catch (error) {
       if (error instanceof PromptTemplateError) {
         this.logger.warn({
@@ -420,6 +463,7 @@ Return ONLY valid JSON with this exact structure:
   }
 
   private async processMemoryCompression(
+    job: Job<JobData, JobResult, string>,
     params: Record<string, unknown>,
   ): Promise<JobResult> {
     const planId = params.planId as string;
@@ -437,20 +481,97 @@ Return ONLY valid JSON with this exact structure:
       );
     }
 
-    this.logger.log("Processing memory_compression job with params:", {
+    // Track metrics: start time, CPU usage, memory
+    const processingStartTime = Date.now();
+    const cpuUsageBefore = process.cpuUsage();
+    const memoryUsageBefore = process.memoryUsage();
+
+    // Calculate queue time (time from job creation to processing start)
+    const queueTimeMs = job.processedOn
+      ? job.processedOn - (job.timestamp || Date.now())
+      : 0;
+
+    this.logger.log({
+      action: "memory_compression.worker.start",
       planId,
       mode,
       userId: userId ?? null,
       dryRun: dryRun ?? false,
+      queueTimeMs,
+      jobCreatedAt: job.timestamp
+        ? new Date(job.timestamp).toISOString()
+        : null,
     });
 
-    const compressionResult =
-      await this.memoryCompressionService.compressPlanMemory(
+    let compressionResult: CompressionResult;
+    try {
+      compressionResult =
+        await this.memoryCompressionService.compressPlanMemory(
+          planId,
+          mode,
+          userId,
+          { dryRun },
+        );
+    } finally {
+      // Track metrics: end time, CPU usage, memory
+      const processingEndTime = Date.now();
+      const processingDurationMs = processingEndTime - processingStartTime;
+      const cpuUsageAfter = process.cpuUsage(cpuUsageBefore);
+      const memoryUsageAfter = process.memoryUsage();
+
+      // Calculate CPU usage
+      const cpuUserMs = cpuUsageAfter.user / 1000; // Convert microseconds to milliseconds
+      const cpuSystemMs = cpuUsageAfter.system / 1000;
+      const cpuTotalMs = cpuUserMs + cpuSystemMs;
+      const cpuPercentage =
+        processingDurationMs > 0
+          ? ((cpuTotalMs / processingDurationMs) * 100).toFixed(2)
+          : "0.00";
+
+      // Memory delta
+      const memoryDeltaMB = {
+        rss: (memoryUsageAfter.rss - memoryUsageBefore.rss) / 1024 / 1024,
+        heapTotal:
+          (memoryUsageAfter.heapTotal - memoryUsageBefore.heapTotal) /
+          1024 /
+          1024,
+        heapUsed:
+          (memoryUsageAfter.heapUsed - memoryUsageBefore.heapUsed) /
+          1024 /
+          1024,
+        external:
+          (memoryUsageAfter.external - memoryUsageBefore.external) /
+          1024 /
+          1024,
+      };
+
+      // Log worker metrics
+      this.logger.log({
+        action: "memory_compression.worker.metrics",
         planId,
         mode,
-        userId,
-        { dryRun },
-      );
+        queueTimeMs,
+        processingDurationMs,
+        totalLatencyMs: queueTimeMs + processingDurationMs,
+        cpu: {
+          userMs: cpuUserMs.toFixed(2),
+          systemMs: cpuSystemMs.toFixed(2),
+          totalMs: cpuTotalMs.toFixed(2),
+          percentage: cpuPercentage,
+        },
+        memory: {
+          rssMB: memoryUsageAfter.rss / 1024 / 1024,
+          heapTotalMB: memoryUsageAfter.heapTotal / 1024 / 1024,
+          heapUsedMB: memoryUsageAfter.heapUsed / 1024 / 1024,
+          externalMB: memoryUsageAfter.external / 1024 / 1024,
+          deltaMB: memoryDeltaMB,
+        },
+      });
+    }
+
+    if (!compressionResult) {
+      throw new Error("Compression result is missing");
+    }
 
     return {
       success: true,

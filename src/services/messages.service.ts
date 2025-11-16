@@ -148,4 +148,72 @@ export class MessagesService {
       totalPages,
     };
   }
+
+  /**
+   * Get recent messages for a conversation (internal use, no ownership check)
+   * Used by context builders
+   */
+  async getRecentMessagesInternal(
+    conversationId: string,
+    limit: number,
+  ): Promise<Message[]> {
+    const queryBuilder = this.messagesRepository
+      .createQueryBuilder("m")
+      .where("m.conversation_id = :conversationId", { conversationId })
+      .andWhere("m.is_deleted = false")
+      .orderBy("m.created_at", "DESC")
+      .addOrderBy("m.id", "ASC") // Stable sort
+      .take(limit);
+
+    return await queryBuilder.getMany();
+  }
+
+  /**
+   * Create an assistant message
+   */
+  async createAssistantMessage(
+    userId: string,
+    conversationId: string,
+    content: string,
+  ): Promise<Message> {
+    // Verify conversation ownership
+    const conversation = await this.conversationsService.findOne(
+      conversationId,
+      userId,
+    );
+
+    this.logger.log({
+      action: "create_assistant_message",
+      userId,
+      conversationId,
+      planId: conversation.planId,
+      contentLength: content.length,
+    });
+
+    const message = this.messagesRepository.create({
+      conversationId,
+      role: MessageRole.ASSISTANT,
+      content,
+      createdBy: userId,
+      isDeleted: false,
+    });
+
+    const savedMessage = await this.messagesRepository.save(message);
+
+    // Update conversation metadata
+    await this.conversationsService.updateMessageMetadata(
+      conversationId,
+      savedMessage.createdAt,
+    );
+
+    this.logger.log({
+      action: "assistant_message_created",
+      userId,
+      conversationId,
+      planId: conversation.planId,
+      messageId: savedMessage.id,
+    });
+
+    return savedMessage;
+  }
 }

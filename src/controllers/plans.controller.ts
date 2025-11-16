@@ -21,8 +21,13 @@ import { User } from "../entities/user.entity";
 import { Plan } from "../entities/plan.entity";
 import { PaginatedResponse } from "../common/dto/paginated-response.dto";
 import { MemoryCompressionService } from "../services/memory-compression.service";
-import { CompressionDiagnostics } from "../shared/types/memory-compression.type";
+import {
+  CompressionDiagnostics,
+  MemoryStats,
+  CompressionResult,
+} from "../shared/types/memory-compression.type";
 import { ParseUUIDPipe } from "@nestjs/common";
+import { CompressMemoryDto } from "../dto/plans/compress-memory.dto";
 
 @Controller("plans")
 @UseGuards(JwtAuthGuard)
@@ -83,6 +88,29 @@ export class PlansController {
     return await this.memoryCompressionService.getCompressionDiagnostics(
       id,
       user.id,
+    );
+  }
+
+  @Get(":id/memory/stats")
+  async getMemoryStats(
+    @CurrentUser() user: User,
+    @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,
+  ): Promise<MemoryStats> {
+    return await this.memoryCompressionService.getMemoryStats(id, user.id);
+  }
+
+  @Post(":id/memory/compress")
+  @HttpCode(HttpStatus.OK)
+  async compressMemory(
+    @CurrentUser() user: User,
+    @Param("id", new ParseUUIDPipe({ version: "4" })) id: string,
+    @Body() compressMemoryDto: CompressMemoryDto,
+  ): Promise<CompressionResult> {
+    return await this.memoryCompressionService.compressPlanMemory(
+      id,
+      compressMemoryDto.mode,
+      user.id,
+      { dryRun: compressMemoryDto.dryRun ?? false },
     );
   }
 }

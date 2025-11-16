@@ -4,9 +4,12 @@ import {
   Inject,
   BadRequestException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { Embedding } from "../entities/embedding.entity";
+import { Job, JobState } from "../entities/job.entity";
+import { Conversation } from "../entities/conversation.entity";
 import { PlansService } from "./plans.service";
 import { LLM_CLIENT } from "../common/services/llm/llm.client";
 import type { LlmClient } from "../common/services/llm/llm.client";
@@ -17,6 +20,7 @@ import {
   CompressionOptions,
   CachedEmbeddingVector,
   CompressionDiagnostics,
+  MemoryStats,
 } from "../shared/types/memory-compression.type";
 import {
   MEMORY_COMPRESSION_SIMILARITY_THRESHOLD,
@@ -24,24 +28,40 @@ import {
   MEMORY_COMPRESSION_MIN_CLUSTER_SIZE,
   MEMORY_COMPRESSION_MAX_CLUSTER_SIZE,
   MEMORY_COMPRESSION_MIN_AGE_DAYS,
-  MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT,
   MEMORY_COMPRESSION_MIN_CLUSTER_SIZE_FOR_SUMMARY,
   MEMORY_COMPRESSION_PARALLEL_CLUSTER_BATCH_SIZE,
 } from "../shared/constants/memory-compression.constant";
+import memoryCompressionConfig from "../config/memory-compression.config";
 
 @Injectable()
 export class MemoryCompressionService {
   private readonly logger = new Logger(MemoryCompressionService.name);
+  private readonly minEmbeddingsThreshold: number;
+  private readonly preserveRecentCount: number;
+  private readonly activeConversationDays: number;
 
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(Embedding)
     private readonly embeddingsRepo: Repository<Embedding>,
+    @InjectRepository(Job)
+    private readonly jobsRepo: Repository<Job>,
+    @InjectRepository(Conversation)
+    private readonly conversationsRepo: Repository<Conversation>,
     private readonly plansService: PlansService,
+    private readonly configService: ConfigService,
 
     @Inject(LLM_CLIENT)
     private readonly llmClient: LlmClient,
-  ) {}
+  ) {
+    const config =
+      this.configService.get<ReturnType<typeof memoryCompressionConfig>>(
+        "memoryCompression",
+      );
+    this.minEmbeddingsThreshold = config?.minEmbeddingsThreshold ?? 50;
+    this.preserveRecentCount = config?.preserveRecentCount ?? 20;
+    this.activeConversationDays = config?.activeConversationDays ?? 7;
+  }
 
   /**
    * Compress plan memory based on mode
@@ -74,12 +94,50 @@ export class MemoryCompressionService {
       where: { planId, isDeleted: false },
     });
 
+    this.logger.log({
+      action: "memory_compression.initial_count",
+      planId,
+      mode,
+      embeddingsBefore: beforeCount,
+    });
+
+    // Check minimum threshold
+    if (beforeCount < this.minEmbeddingsThreshold) {
+      const skipReason = `Embedding count (${beforeCount}) is below minimum threshold (${this.minEmbeddingsThreshold})`;
+      this.logger.warn({
+        action: "memory_compression.skipped",
+        planId,
+        mode,
+        reason: skipReason,
+        embeddingsBefore: beforeCount,
+        threshold: this.minEmbeddingsThreshold,
+      });
+
+      const durationMs = Date.now() - startTime;
+      return {
+        planId,
+        mode,
+        beforeCount,
+        afterCount: beforeCount,
+        compressionRatio: 0,
+        durationMs,
+        skipped: true,
+        skipReason,
+      };
+    }
+
     let duplicatesRemoved = 0;
     let clustersMerged = 0;
     let embeddingsArchived = 0;
 
     if (mode === "light") {
       // Light mode: duplicate removal only
+      this.logger.log({
+        action: "memory_compression.light_mode.start",
+        planId,
+        embeddingsBefore: beforeCount,
+      });
+
       const duplicateGroups = await this.findRedundantEmbeddings(planId);
       const duplicateIds: string[] = [];
 
@@ -90,20 +148,55 @@ export class MemoryCompressionService {
         }
       }
 
+      this.logger.log({
+        action: "memory_compression.light_mode.duplicates_found",
+        planId,
+        duplicateGroups: duplicateGroups.length,
+        duplicatesToRemove: duplicateIds.length,
+      });
+
       if (duplicateIds.length > 0) {
         if (!dryRun) {
           await this.archiveEmbeddings(duplicateIds, userId);
         }
         duplicatesRemoved = duplicateIds.length;
+
+        this.logger.log({
+          action: "memory_compression.light_mode.duplicates_removed",
+          planId,
+          duplicatesRemoved,
+        });
+      } else {
+        this.logger.log({
+          action: "memory_compression.light_mode.no_duplicates",
+          planId,
+        });
       }
     } else if (mode === "full") {
       // Full mode: cluster + merge + archive
+      this.logger.log({
+        action: "memory_compression.full_mode.start",
+        planId,
+        embeddingsBefore: beforeCount,
+      });
+
       const clusters = await this.groupSimilarEmbeddings(planId);
 
       // Process clusters in parallel batches for better performance
       const validClusters = clusters.filter(
         (c) => c.embeddings.length >= MEMORY_COMPRESSION_MIN_CLUSTER_SIZE,
       );
+
+      this.logger.log({
+        action: "memory_compression.full_mode.clusters_found",
+        planId,
+        totalClusters: clusters.length,
+        validClusters: validClusters.length,
+        totalEmbeddingsInClusters: validClusters.reduce(
+          (sum, c) => sum + c.embeddings.length,
+          0,
+        ),
+      });
 
       // Process clusters in batches to avoid overwhelming the system
       for (
@@ -152,7 +245,36 @@ export class MemoryCompressionService {
             clustersMerged++;
           }
         }
+
+        const successfulResults = results.filter(
+          (
+            r,
+          ): r is PromiseFulfilledResult<{
+            success: boolean;
+            archived: number;
+          }> => r.status === "fulfilled" && r.value.success,
+        );
+
+        this.logger.log({
+          action: "memory_compression.full_mode.batch_processed",
+          planId,
+          batchIndex:
+            Math.floor(i / MEMORY_COMPRESSION_PARALLEL_CLUSTER_BATCH_SIZE) + 1,
+          batchSize: batch.length,
+          clustersMergedInBatch: successfulResults.length,
+          embeddingsArchivedInBatch: successfulResults.reduce(
+            (sum, r) => sum + r.value.archived,
+            0,
+          ),
+        });
       }
+
+      this.logger.log({
+        action: "memory_compression.full_mode.merging_complete",
+        planId,
+        totalClustersMerged: clustersMerged,
+        totalEmbeddingsArchived: embeddingsArchived,
+      });
     }
 
     // Get final embedding count
@@ -163,6 +285,8 @@ export class MemoryCompressionService {
     const durationMs = Date.now() - startTime;
     const compressionRatio =
       beforeCount > 0 ? (beforeCount - afterCount) / beforeCount : 0;
+    const compressionPercentage = (compressionRatio * 100).toFixed(2);
+    const reductionCount = beforeCount - afterCount;
 
     const result: CompressionResult = {
       planId,
@@ -180,13 +304,17 @@ export class MemoryCompressionService {
       action: "memory_compression.complete",
       planId,
       mode,
-      beforeCount,
-      afterCount,
+      dryRun,
+      embeddingsBefore: beforeCount,
+      embeddingsAfter: afterCount,
+      embeddingsReduced: reductionCount,
       compressionRatio: compressionRatio.toFixed(4),
-      duplicatesRemoved,
-      clustersMerged,
-      embeddingsArchived,
+      compressionPercentage: `${compressionPercentage}%`,
+      duplicatesRemoved: mode === "light" ? duplicatesRemoved : undefined,
+      clustersMerged: mode === "full" ? clustersMerged : undefined,
+      embeddingsArchived: mode === "full" ? embeddingsArchived : undefined,
       durationMs,
+      durationSeconds: (durationMs / 1000).toFixed(2),
     });
 
     return result;
@@ -576,7 +704,9 @@ Provide a concise summary that captures the essential information:`;
 
   /**
    * Get embeddings eligible for compression
-   * Excludes the most recent N embeddings to preserve fresh context
+   * Excludes:
+   * - The most recent N embeddings (configurable)
+   * - Embeddings linked to active conversations
    */
   private async getEligibleEmbeddings(
     planId: string,
@@ -596,17 +726,102 @@ Provide a concise summary that captures the essential information:`;
       },
     });
 
-    // Preserve the most recent N embeddings
-    const toPreserve = allEmbeddings.slice(
-      0,
-      MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT,
-    );
+    // Preserve the most recent N embeddings (configurable)
+    const toPreserve = allEmbeddings.slice(0, this.preserveRecentCount);
     const preserveIds = new Set(toPreserve.map((e) => e.id));
 
-    // Filter to eligible embeddings (old enough AND not in preserve set)
+    // Get active conversation embedding IDs to exclude
+    const activeConversationEmbeddingIds =
+      await this.getActiveConversationEmbeddingIds(planId);
+    const activeIds = new Set(activeConversationEmbeddingIds);
+
+    // Filter to eligible embeddings (old enough AND not in preserve set AND not in active conversations)
     return allEmbeddings.filter(
-      (e) => e.createdAt < minAgeDate && !preserveIds.has(e.id),
+      (e) =>
+        e.createdAt < minAgeDate &&
+        !preserveIds.has(e.id) &&
+        !activeIds.has(e.id),
     );
+  }
+
+  /**
+   * Get embedding IDs linked to active conversations
+   * A conversation is considered "active" if it has messages within the configured time window
+   */
+  private async getActiveConversationEmbeddingIds(
+    planId: string,
+  ): Promise<string[]> {
+    const activeDate = new Date();
+    activeDate.setDate(activeDate.getDate() - this.activeConversationDays);
+
+    // Find active conversations (with messages in the last N days) using SQL for efficiency
+    const activeConversationsSql = `
+      SELECT DISTINCT c.id
+      FROM conversations c
+      WHERE c.plan_id = $1
+        AND c.is_deleted = false
+        AND c.last_message_at >= $2
+    `;
+
+    interface ConversationRow {
+      id: string;
+    }
+
+    const activeConversationRows = (await this.dataSource.query(
+      activeConversationsSql,
+      [planId, activeDate],
+    )) as unknown as ConversationRow[];
+    const activeConversationIds = activeConversationRows.map((row) => row.id);
+
+    if (activeConversationIds.length === 0) {
+      return [];
+    }
+
+    // Get all message IDs from active conversations
+    const activeMessagesSql = `
+      SELECT m.id
+      FROM messages m
+      INNER JOIN conversations c ON m.conversation_id = c.id
+      WHERE c.plan_id = $1
+        AND c.is_deleted = false
+        AND c.last_message_at >= $2
+        AND m.is_deleted = false
+    `;
+
+    interface MessageRow {
+      id: string;
+    }
+
+    const activeMessageRows = (await this.dataSource.query(activeMessagesSql, [
+      planId,
+      activeDate,
+    ])) as unknown as MessageRow[];
+    const activeMessageIds = activeMessageRows.map((row) => row.id);
+
+    // Query embeddings linked to active conversations or messages
+    // Use a single efficient SQL query
+    const sql = `
+      SELECT e.id
+      FROM embeddings e
+      WHERE e.plan_id = $1
+        AND e.is_deleted = false
+        AND (
+          (e.ref_type = 'conversation' AND e.ref_id = ANY($2::uuid[]))
+          OR (e.ref_type = 'message' AND e.ref_id = ANY($3::uuid[]))
+        )
+    `;
+
+    interface EmbeddingRow {
+      id: string;
+    }
+
+    const results = (await this.dataSource.query(sql, [
+      planId,
+      activeConversationIds.length > 0 ? activeConversationIds : [null],
+      activeMessageIds.length > 0 ? activeMessageIds : [null],
+    ])) as unknown as EmbeddingRow[];
+
+    return results.map((row) => row.id);
   }
 
   /**
@@ -707,7 +922,7 @@ Provide a concise summary that captures the essential information:`;
 
     const preservedEmbeddings = Math.min(
       totalEmbeddings - eligibleEmbeddings.length,
-      MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT,
+      this.preserveRecentCount,
     );
 
     // Find duplicate groups (light mode analysis)
@@ -741,6 +956,84 @@ Provide a concise summary that captures the essential information:`;
       duplicateGroups: duplicateGroups.length,
       potentialClusters: potentialClusters.length,
       estimatedCompressionRatio,
+    };
+  }
+
+  /**
+   * Get memory statistics for a plan
+   * Includes current embedding counts and last compression history
+   */
+  async getMemoryStats(planId: string, userId?: string): Promise<MemoryStats> {
+    // Verify plan ownership if userId provided
+    if (userId) {
+      await this.plansService.verifyOwnership(planId, userId);
+    }
+
+    // Get current embedding counts
+    const totalEmbeddings = await this.embeddingsRepo.count({
+      where: { planId },
+    });
+
+    const activeEmbeddings = await this.embeddingsRepo.count({
+      where: { planId, isDeleted: false },
+    });
+
+    const archivedEmbeddings = totalEmbeddings - activeEmbeddings;
+
+    // Get last completed compression job
+    const lastCompressionJob = await this.jobsRepo.findOne({
+      where: {
+        planId,
+        type: "memory_compression",
+        state: JobState.COMPLETED,
+      },
+      order: {
+        finishedAt: "DESC",
+      },
+    });
+
+    let lastCompression:
+      | {
+          mode: MemoryCompressionMode;
+          beforeCount: number;
+          afterCount: number;
+          compressionRatio: number;
+          duplicatesRemoved?: number;
+          clustersMerged?: number;
+          embeddingsArchived?: number;
+          durationMs: number;
+          timestamp: Date;
+        }
+      | undefined;
+
+    if (lastCompressionJob?.result) {
+      const result = lastCompressionJob.result as unknown as {
+        data?: CompressionResult;
+      };
+
+      if (result.data) {
+        const compressionData = result.data;
+        lastCompression = {
+          mode: compressionData.mode,
+          beforeCount: compressionData.beforeCount,
+          afterCount: compressionData.afterCount,
+          compressionRatio: compressionData.compressionRatio,
+          duplicatesRemoved: compressionData.duplicatesRemoved,
+          clustersMerged: compressionData.clustersMerged,
+          embeddingsArchived: compressionData.embeddingsArchived,
+          durationMs: compressionData.durationMs,
+          timestamp:
+            lastCompressionJob.finishedAt || lastCompressionJob.createdAt,
+        };
+      }
+    }
+
+    return {
+      planId,
+      totalEmbeddings,
+      archivedEmbeddings,
+      activeEmbeddings,
+      lastCompression,
     };
   }
 }

@@ -16,6 +16,7 @@ import { LlmModule } from "./modules/llm.module";
 import { PromptTemplatesModule } from "./modules/prompt-templates.module";
 import { EmbeddingsModule } from "./modules/embeddings.module";
 import { MemoryCompressionModule } from "./modules/memory-compression.module";
+import { ContextBuildersModule } from "./modules/context-builders.module";
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { MemoryCompressionModule } from "./modules/memory-compression.module";
     PromptTemplatesModule,
     EmbeddingsModule,
     MemoryCompressionModule,
+    ContextBuildersModule,
   ],
   providers: [
     // Global exception filter

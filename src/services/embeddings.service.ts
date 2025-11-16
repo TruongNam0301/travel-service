@@ -709,6 +709,27 @@ export class EmbeddingsService {
     return results;
   }
 
+  /**
+   * Search similar embeddings (internal use, no ownership check)
+   * Used by context builders
+   */
+  async searchSimilarInternal(
+    planId: string,
+    query: string,
+    opts?: SearchOpts,
+  ): Promise<SearchResult[]> {
+    // Use a dummy userId for internal calls - we'll bypass ownership check
+    // by using a special internal flag or by modifying the service
+    // For now, we'll need to get userId from plan
+    const plan = await this.plansService.findOneById(planId);
+    if (!plan) {
+      return [];
+    }
+
+    // Use the regular search method with plan owner's userId
+    return await this.searchSimilar(plan.userId, planId, query, opts);
+  }
+
   // ───────────── helpers ─────────────
   private normalize(s: string): string {
     return (s ?? "").replace(/\s+/g, " ").trim().slice(0, this.MAX_TEXT_LEN);

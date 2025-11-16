@@ -356,4 +356,22 @@ export class JobsService {
       newState: updates.state,
     });
   }
+
+  /**
+   * Get recent completed jobs for a plan (internal use, no ownership check)
+   * Used by context builders
+   */
+  async getRecentJobsInternal(planId: string, limit: number): Promise<Job[]> {
+    return await this.jobsRepository.find({
+      where: {
+        planId,
+        state: JobState.COMPLETED,
+      },
+      order: {
+        finishedAt: "DESC",
+        createdAt: "DESC",
+      },
+      take: limit,
+    });
+  }
 }
