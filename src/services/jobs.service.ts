@@ -374,4 +374,23 @@ export class JobsService {
       take: limit,
     });
   }
+
+  /**
+   * Find the most recent job for a specific plan and type
+   * Used to provide conversational context for follow-up job requests
+   */
+  async findMostRecentJobByPlanAndType(
+    planId: string,
+    type: string,
+  ): Promise<Job | null> {
+    return await this.jobsRepository.findOne({
+      where: {
+        planId,
+        type,
+      },
+      order: {
+        createdAt: "DESC",
+      },
+    });
+  }
 }

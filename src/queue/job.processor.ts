@@ -2,8 +2,10 @@ import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger, forwardRef } from "@nestjs/common";
 import { Job } from "bullmq";
 import * as llmClient_1 from "src/common/services/llm/llm.client";
+import { LlmConfig } from "../common/services/llm/llm.config";
 import { JobState } from "../entities/job.entity";
 import { JobsService } from "../services/jobs.service";
+import { MessagesService } from "../services/messages.service";
 import { JobData, JobResult } from "../shared/types/job.type";
 import {
   PromptTemplatesService,
@@ -27,11 +29,19 @@ export class JobProcessor extends WorkerHost {
     private readonly jobsService: JobsService,
     @Inject(llmClient_1.LLM_CLIENT)
     private readonly llmClient: llmClient_1.LlmClient,
+    private readonly llmConfig: LlmConfig,
     private readonly promptTemplatesService: PromptTemplatesService,
     private readonly memoryCompressionService: MemoryCompressionService,
     private readonly finalContextComposer: FinalContextComposer,
+    @Inject(forwardRef(() => MessagesService))
+    private readonly messagesService: MessagesService,
   ) {
     super();
+  }
+
+  private resolveModelForJob(jobType: string): string {
+    const { routing, chatModel } = this.llmConfig.values;
+    return routing.jobs[jobType] ?? routing.chat.default ?? chatModel;
   }
 
   async process(job: Job<JobData, JobResult, string>): Promise<JobResult> {
@@ -102,7 +112,7 @@ export class JobProcessor extends WorkerHost {
 
   @OnWorkerEvent("completed")
   async onCompleted(job: Job<JobData, JobResult>) {
-    const { jobId } = job.data;
+    const { jobId, params, userId } = job.data;
     const result = job.returnvalue;
     const finishedAt = new Date();
     const startedAt = job.processedOn ? new Date(job.processedOn) : finishedAt;
@@ -122,11 +132,37 @@ export class JobProcessor extends WorkerHost {
       durationMs,
       result: result as unknown as Record<string, unknown>,
     });
+
+    // Send results back to conversation if conversationId is present
+    const conversationId = params.conversationId as string | undefined;
+    if (conversationId && userId && result) {
+      try {
+        const formattedResult = this.formatJobResultForUser(result);
+        await this.messagesService.createAssistantMessage(
+          userId,
+          conversationId,
+          formattedResult,
+        );
+
+        this.logger.log({
+          action: "job_result_sent_to_conversation",
+          jobId,
+          conversationId,
+        });
+      } catch (error) {
+        this.logger.warn({
+          action: "job_result_delivery_failed",
+          jobId,
+          conversationId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
   }
 
   @OnWorkerEvent("failed")
   async onFailed(job: Job<JobData>, error: Error) {
-    const { jobId } = job.data;
+    const { jobId, params, userId } = job.data;
     const finishedAt = new Date();
     const startedAt = job.processedOn ? new Date(job.processedOn) : finishedAt;
     const durationMs = finishedAt.getTime() - startedAt.getTime();
@@ -146,6 +182,63 @@ export class JobProcessor extends WorkerHost {
       durationMs,
       error: error.message,
     });
+
+    // Notify user of failure if conversationId is present
+    const conversationId = params.conversationId as string | undefined;
+    if (conversationId && userId) {
+      try {
+        const errorMessage = `I'm sorry, but I encountered an error while processing your request: ${error.message}. Please try again or rephrase your request.`;
+        await this.messagesService.createAssistantMessage(
+          userId,
+          conversationId,
+          errorMessage,
+        );
+
+        this.logger.log({
+          action: "job_error_sent_to_conversation",
+          jobId,
+          conversationId,
+        });
+      } catch (notificationError) {
+        this.logger.warn({
+          action: "job_error_notification_failed",
+          jobId,
+          conversationId,
+          error:
+            notificationError instanceof Error
+              ? notificationError.message
+              : "Unknown error",
+        });
+      }
+    }
+  }
+
+  /**
+   * Format job result for user-friendly display in conversation
+   * Returns JSON string with both message and structured data for frontend mapping
+   */
+  private formatJobResultForUser(result: JobResult): string {
+    if (!result.success) {
+      const errorResponse = {
+        type: "job_result",
+        success: false,
+        message: `I couldn't complete the search. ${result.summary || "Please try again."}`,
+        data: null,
+      };
+      return JSON.stringify(errorResponse);
+    }
+
+    // Create structured response with both message and data
+    const response = {
+      type: "job_result",
+      success: true,
+      jobType: result.jobType,
+      message: result.summary || "Here's what I found:",
+      data: result.data, // Full structured data for frontend mapping
+      meta: result.meta,
+    };
+
+    return JSON.stringify(response, null, 2);
   }
 
   /**
@@ -250,27 +343,63 @@ export class JobProcessor extends WorkerHost {
   private async processResearchHotel(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
-    const city = params.city as string;
+    // Extract destination (larger region) with fallback to city for backward compatibility
+    const destination =
+      (params.destination as string) || (params.city as string);
+    // Extract location (smaller sub-area) separately
+    const location = params.location as string | undefined;
     const nights = params.nights as number;
     const locationDetails = params.locationDetails as string;
     const budget = params.budget as string;
     const reviewScore = params.reviewScore as number;
+    const checkInDate = params.checkInDate as string;
+    const checkOutDate = params.checkOutDate as string;
+    const budgetPerNight = params.budgetPerNight as number;
+    const currency = params.currency as string;
+    const minRating = params.minRating as number;
+    const guests = params.guests as number;
 
-    if (!city) {
-      throw new Error("Missing required parameter: city");
+    if (!destination) {
+      throw new Error(
+        "Missing required parameter: destination or city must be provided",
+      );
     }
 
     this.logger.log("Processing research_hotel job with params:", params);
 
+    // Build location text (smaller sub-area)
+    const locationText = location ? ` in ${location}` : "";
+    // Build location details (address)
     const locationDetailsPrompt = locationDetails
       ? ` in address ${locationDetails}`
       : "";
-    const budgetPrompt = budget ? ` with ${budget} budget` : "";
-    const reviewScorePrompt = reviewScore
-      ? ` with review score of ${reviewScore}`
+
+    // Build date range prompt
+    const dateRangePrompt =
+      checkInDate && checkOutDate
+        ? ` from ${checkInDate} to ${checkOutDate}`
+        : nights
+          ? ` for ${nights} night${nights > 1 ? "s" : ""}`
+          : "";
+
+    // Build budget prompt (support both formats)
+    const budgetValue = budgetPerNight
+      ? `${budgetPerNight.toLocaleString()} ${currency || "VND"} per night`
+      : budget || "";
+    const budgetPrompt = budgetValue ? ` with budget ${budgetValue}` : "";
+
+    // Build rating prompt
+    const ratingValue = minRating || reviewScore;
+    const ratingPrompt = ratingValue
+      ? ` with rating ${ratingValue} or higher`
       : "";
 
-    const fallbackPrompt = `You are a travel research assistant in VietNam. Find google maps and return hotel recommendations for ${city} ${nights}${locationDetailsPrompt}${budgetPrompt}${reviewScorePrompt}.
+    // Build guests prompt
+    const guestsPrompt = guests
+      ? ` for ${guests} guest${guests > 1 ? "s" : ""}`
+      : "";
+
+    const fallbackPrompt = `You are a travel research assistant in VietNam. Find google maps and return hotel recommendations for ${destination}${locationText}${dateRangePrompt}${guestsPrompt}${locationDetailsPrompt}${budgetPrompt}${ratingPrompt}.
 Return ONLY valid JSON with this exact structure: {
   "hotels": [
     {
@@ -280,13 +409,10 @@ Return ONLY valid JSON with this exact structure: {
       "amenities": ["amenity1", "amenity2"],
       "location": "specific area in city",
       "address": "address of the hotel",
-      "link_google_maps": "link to the hotel on google maps",
-
+      "link_google_maps": "link to the hotel on google maps"
     }
   ]
 }`;
-
-    console.log("fallbackPrompt", fallbackPrompt);
 
     const prompt = await this.renderPrompt(
       "research_hotel",
@@ -294,12 +420,17 @@ Return ONLY valid JSON with this exact structure: {
       fallbackPrompt,
     );
 
-    const { text, usage, model } = await this.llmClient.generate(prompt, {
+    const model = this.resolveModelForJob("research_hotel");
+    const {
+      text,
+      usage,
+      model: responseModel,
+    } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.3,
       maxTokens: 2000,
+      model,
     });
-    console.log("text", text);
     // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
@@ -317,14 +448,21 @@ Return ONLY valid JSON with this exact structure: {
       );
     }
 
+    const hotelCount = (parsedData?.hotels as unknown[])?.length ?? 0;
+    const locationSummary = location ? ` in ${location}` : "";
+    const summary =
+      hotelCount > 0
+        ? `Found ${hotelCount} hotel${hotelCount > 1 ? "s" : ""} in ${destination}${locationSummary}`
+        : `No hotels found in ${destination}${locationSummary} matching your criteria`;
+
     return {
       success: true,
       jobType: "research_hotel",
       data: parsedData,
-      summary: `Found ${(parsedData?.hotels as unknown[])?.length ?? 0} hotels in ${city}`,
+      summary,
       meta: {
         createdAt: new Date().toISOString(),
-        model: model ?? "unknown",
+        model: responseModel ?? "unknown",
         tokensUsed: usage?.total ?? 0,
       },
     };
@@ -333,17 +471,24 @@ Return ONLY valid JSON with this exact structure: {
   private async processFindFood(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
-    const city = params.city as string;
+    // Extract destination (larger region) with fallback to city for backward compatibility
+    const destination =
+      (params.destination as string) || (params.city as string);
+    // Extract location (smaller sub-area) separately
+    const location = params.location as string | undefined;
     const cuisine = params.cuisine as string;
     const budget = params.budget as string;
 
-    if (!city) {
-      throw new Error("Missing required parameter: city");
+    if (!destination) {
+      throw new Error(
+        "Missing required parameter: destination or city must be provided",
+      );
     }
 
     this.logger.log("Processing find_food job with params:", params);
 
-    const fallbackPrompt = `You are a travel research assistant. Find and return restaurant recommendations for ${city}${cuisine ? ` specializing in ${cuisine} cuisine` : ""}${budget ? ` with ${budget} budget` : ""}.
+    const locationText = location ? ` in ${location}` : "";
+    const fallbackPrompt = `You are a travel research assistant. Find and return restaurant recommendations for ${destination}${locationText}${cuisine ? ` specializing in ${cuisine} cuisine` : ""}${budget ? ` with ${budget} budget` : ""}.
 Return ONLY valid JSON with this exact structure:
 {
   "restaurants": [
@@ -361,10 +506,16 @@ Return ONLY valid JSON with this exact structure:
 
     const prompt = await this.renderPrompt("find_food", params, fallbackPrompt);
 
-    const { text, usage, model } = await this.llmClient.generate(prompt, {
+    const model = this.resolveModelForJob("find_food");
+    const {
+      text,
+      usage,
+      model: responseModel,
+    } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.4,
       maxTokens: 2000,
+      model,
     });
 
     let parsedData: Record<string, unknown>;
@@ -377,14 +528,15 @@ Return ONLY valid JSON with this exact structure:
       );
     }
 
+    const locationSummary = location ? ` in ${location}` : "";
     return {
       success: true,
       jobType: "find_food",
       data: parsedData,
-      summary: `Found ${(parsedData?.restaurants as unknown[])?.length ?? 0} restaurants in ${city}`,
+      summary: `Found ${(parsedData?.restaurants as unknown[])?.length ?? 0} restaurants in ${destination}${locationSummary}`,
       meta: {
         createdAt: new Date().toISOString(),
-        model: model ?? "unknown",
+        model: responseModel ?? "unknown",
         tokensUsed: usage?.total ?? 0,
       },
     };
@@ -393,12 +545,18 @@ Return ONLY valid JSON with this exact structure:
   private async processFindAttraction(
     params: Record<string, unknown>,
   ): Promise<JobResult> {
-    const city = params.city as string;
+    // Support both old format (city) and new format (location, destination)
+    const city =
+      (params.city as string) ||
+      (params.location as string) ||
+      (params.destination as string);
     const category = params.category as string;
     const duration = params.duration as string;
 
     if (!city) {
-      throw new Error("Missing required parameter: city");
+      throw new Error(
+        "Missing required parameter: city, location, or destination must be provided",
+      );
     }
 
     this.logger.log("Processing find_attraction job with params:", params);
@@ -426,10 +584,16 @@ Return ONLY valid JSON with this exact structure:
       fallbackPrompt,
     );
 
-    const { text, usage, model } = await this.llmClient.generate(prompt, {
+    const model = this.resolveModelForJob("find_attraction");
+    const {
+      text,
+      usage,
+      model: responseModel,
+    } = await this.llmClient.generate(prompt, {
       jobId: params.jobId as string,
       temperature: 0.4,
       maxTokens: 2000,
+      model,
     });
 
     // Parse JSON safely
@@ -456,7 +620,7 @@ Return ONLY valid JSON with this exact structure:
       summary: `Found ${(parsedData?.attractions as unknown[])?.length ?? 0} attractions in ${city}`,
       meta: {
         createdAt: new Date().toISOString(),
-        model: model ?? "unknown",
+        model: responseModel ?? "unknown",
         tokensUsed: usage?.total ?? 0,
       },
     };

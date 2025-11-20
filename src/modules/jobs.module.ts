@@ -12,6 +12,7 @@ import { LlmModule } from "./llm.module";
 import { PromptTemplatesModule } from "./prompt-templates.module";
 import { MemoryCompressionModule } from "./memory-compression.module";
 import { ContextBuildersModule } from "./context-builders.module";
+import { MessagesModule } from "./messages.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ContextBuildersModule } from "./context-builders.module";
     PromptTemplatesModule,
     forwardRef(() => MemoryCompressionModule),
     ContextBuildersModule,
+    forwardRef(() => MessagesModule),
   ],
   controllers: [JobsController],
   providers: [JobsService, JobTypesService, JobProcessor],

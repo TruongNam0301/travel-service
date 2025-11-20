@@ -43,7 +43,7 @@ export const envSchema = z.object({
   [JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_SECRET]: z
     .string()
     .min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
-  [JWT_CONSTANTS.ENV_KEYS.JWT_ACCESS_EXPIRATION]: z.string().default("1h"),
+  [JWT_CONSTANTS.ENV_KEYS.JWT_ACCESS_EXPIRATION]: z.string().default("1d"),
   [JWT_CONSTANTS.ENV_KEYS.JWT_REFRESH_EXPIRATION]: z.string().default("7d"),
   [JWT_CONSTANTS.ENV_KEYS.JWT_ISSUER]: z
     .string()
@@ -52,13 +52,37 @@ export const envSchema = z.object({
     .string()
     .default(JWT_CONSTANTS.DEFAULT_AUDIENCE),
 
-  // LLM
-  LLM_API_KEY: z.string().min(1, "LLM_API_KEY required"),
-  LLM_MODEL: z.string().default("gpt-4o-mini"),
-  LLM_EMBED_MODEL: z.string().default("text-embedding-3-small"),
-  LLM_TIMEOUT_MS: z.coerce.number().default(30000),
-  LLM_MAX_RETRIES: z.coerce.number().default(2),
-  LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  // LLM Provider
+  LLM_PROVIDER: z.enum(["openai"]).default("openai"),
+
+  // OpenAI Configuration (new preferred format)
+  OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY required").optional(),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1").optional(),
+  OPENAI_CHAT_MODEL: z.string().default("gpt-4o-mini").optional(),
+  OPENAI_EMBED_MODEL: z.string().default("text-embedding-3-small").optional(),
+  OPENAI_TIMEOUT_MS: z.coerce.number().default(60000).optional(),
+  OPENAI_MAX_RETRIES: z.coerce.number().default(2).optional(),
+  OPENAI_PROJECT_ID: z.string().optional(),
+  OPENAI_ORG_ID: z.string().optional(),
+
+  // Model Routing - Chat Modes
+  OPENAI_CHAT_MODEL_DEFAULT: z.string().optional(),
+  OPENAI_CHAT_MODEL_SUMMARY: z.string().optional(),
+  OPENAI_CHAT_MODEL_PLANNING: z.string().optional(),
+
+  // Model Routing - Job Types
+  JOB_MODEL_RESEARCH_HOTEL: z.string().optional(),
+  JOB_MODEL_RESEARCH_FOOD: z.string().optional(),
+  JOB_MODEL_RESEARCH_ATTRACTION: z.string().optional(),
+  JOB_MODEL_MEMORY_COMPRESSION: z.string().optional(),
+
+  // LLM (legacy - kept for backward compatibility)
+  LLM_API_KEY: z.string().min(1).optional(),
+  LLM_MODEL: z.string().optional(),
+  LLM_EMBED_MODEL: z.string().optional(),
+  LLM_TIMEOUT_MS: z.coerce.number().optional(),
+  LLM_MAX_RETRIES: z.coerce.number().optional(),
+  LLM_BASE_URL: z.string().optional(),
 
   // Vector Search
   VECTOR_SEARCH_MODE: z.enum(["cosine", "hnsw"]).default("hnsw"),

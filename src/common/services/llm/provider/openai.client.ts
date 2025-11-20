@@ -1,5 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { LlmClient, LlmGenerateOpts, LlmGenerateResult } from "../llm.client";
+import type {
+  LlmClient,
+  LlmGenerateOpts,
+  LlmGenerateResult,
+} from "../llm.client";
 import { LlmConfig } from "../llm.config";
 
 // Node 20 has global fetch/AbortController
@@ -22,7 +26,7 @@ type OpenAIEmbeddingResponse = {
 };
 
 function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 @Injectable()
@@ -34,16 +38,22 @@ export class OpenAiClient implements LlmClient {
   private readonly baseUrl: string;
   private readonly defaultTimeout: number;
   private readonly maxRetries: number;
+  private readonly projectId?: string;
+  private readonly organizationId?: string;
 
   constructor(private readonly config: LlmConfig) {
-    const values = config.values;
+    const values: import("../llm.config").LlmConfigValues = config.values;
     this.apiKey = values.apiKey;
     this.chatModel = values.chatModel;
     this.embedModel = values.embedModel;
     this.baseUrl = values.baseUrl;
     this.defaultTimeout = values.timeoutMs;
     this.maxRetries = values.maxRetries;
+    this.projectId = values.projectId;
+    this.organizationId = values.organizationId;
   }
+
+  // ------------------ Public API ------------------ //
 
   async generate(
     prompt: string,
@@ -51,25 +61,15 @@ export class OpenAiClient implements LlmClient {
   ): Promise<LlmGenerateResult> {
     const start = Date.now();
     const timeoutMs = opts.timeoutMs ?? this.defaultTimeout;
-
-    const body = {
-      model: this.chatModel,
-      messages: [
-        ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-        { role: "user", content: prompt },
-      ],
-      temperature: opts.temperature ?? 0.3,
-      max_tokens: opts.maxTokens ?? undefined,
-    };
-
-    const res = await this.#withRetries(
+    const model = opts.model ?? this.chatModel;
+    const body = this.buildChatBody(model, prompt, opts);
+    const res = await this.withRetries(
       "chat/completions",
       body,
       timeoutMs,
       opts.jobId,
     );
     const json = (await res.json()) as OpenAIChatResponse;
-
     const text = json.choices?.[0]?.message?.content ?? "";
     const usage = {
       input: json.usage?.prompt_tokens ?? 0,
@@ -84,7 +84,13 @@ export class OpenAiClient implements LlmClient {
 
     const latencyMs = Date.now() - start;
 
-    return { text, usage, model: json.model, latencyMs, provider: "openai" };
+    return {
+      text,
+      usage,
+      model: json.model,
+      latencyMs,
+      provider: "openai",
+    };
   }
 
   async embed(
@@ -93,9 +99,8 @@ export class OpenAiClient implements LlmClient {
   ): Promise<number[][]> {
     if (!texts?.length) return [];
     const timeoutMs = opts?.timeoutMs ?? this.defaultTimeout;
-
     const body = { model: this.embedModel, input: texts };
-    const res = await this.#withRetries(
+    const res = await this.withRetries(
       "embeddings",
       body,
       timeoutMs,
@@ -106,9 +111,50 @@ export class OpenAiClient implements LlmClient {
     return json.data.map((d) => d.embedding);
   }
 
-  async #withRetries(
+  // ------------------ Internal helpers ------------------ //
+
+  private supportsTemperature(model: string): boolean {
+    // Models that DO support temperature. You can extend this as needed.
+    // Example: gpt-4.1, gpt-4o, mini variants etc.
+    if (model.startsWith("gpt-4.1")) return true;
+    if (model.startsWith("gpt-4o")) return true;
+    if (model.includes("mini")) return true;
+    // gpt-5.x models currently treat temperature as fixed 1.
+    // If you add other providers, update this accordingly.
+    return false;
+  }
+
+  private buildChatBody(
+    model: string,
+    prompt: string,
+    opts: LlmGenerateOpts,
+  ): Record<string, unknown> {
+    const systemMessages = opts.system
+      ? [{ role: "system", content: opts.system }]
+      : [];
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: [...systemMessages, { role: "user", content: prompt }],
+    };
+
+    if (opts.maxTokens) {
+      body.max_completion_tokens = opts.maxTokens;
+    }
+
+    if (
+      this.supportsTemperature(model) &&
+      typeof opts.temperature === "number"
+    ) {
+      body.temperature = opts.temperature;
+    }
+
+    return body;
+  }
+
+  private async withRetries(
     path: string,
-    body: any,
+    body: Record<string, unknown>,
     timeoutMs: number,
     jobId?: string,
   ): Promise<Response> {
@@ -116,61 +162,91 @@ export class OpenAiClient implements LlmClient {
     const pathNormalized = path.replace(/^\/+/, "");
     const url = `${baseUrlNormalized}/${pathNormalized}`;
     let attempt = 0;
-    let lastErr: any;
+    let lastErr: Error | undefined;
 
     while (attempt <= this.maxRetries) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      console.log("url", url);
-
       try {
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        };
+
+        if (this.projectId) {
+          headers["OpenAI-Project"] = this.projectId;
+        }
+
+        if (this.organizationId) {
+          headers["OpenAI-Organization"] = this.organizationId;
+        }
+
         const res = await fetch(url, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            "Content-Type": "application/json",
-            "OpenAI-Project": "proj_d6ISs06aV4ijmXphtvQgTxBH",
-            "OpenAI-Organization": "org-GjAXjynRDHDxMG7NW0adqpf0",
-          },
+          headers,
           body: JSON.stringify(body),
           signal: controller.signal,
         });
-        console.log("resOpenAI", res);
 
         clearTimeout(timer);
 
         if (!res.ok) {
           const clonedRes = res.clone();
           const text = await clonedRes.text().catch(() => "");
+          // Retry only on rate limit / server errors
           if (res.status === 429 || res.status >= 500) {
-            throw new Error(`OpenAI HTTP ${res.status}: ${text}`);
+            lastErr = new Error(
+              `OpenAI HTTP ${res.status}: ${text.substring(0, 300)}`,
+            );
+            throw lastErr;
           }
 
-          throw new Error(
-            `OpenAI HTTP ${res.status}: ${text.substring(0, 200)}`,
-          );
+          // No retry for 4xx (usually client/config issue)
+          const err = new Error(
+            `OpenAI HTTP ${res.status}: ${text.substring(0, 300)}`,
+          ) as Error & { status?: number };
+          err.status = res.status;
+          this.log.error({
+            action: "llm.error.non_retryable",
+            path,
+            url,
+            jobId,
+            status: res.status,
+            err: err.message,
+          });
+          throw err;
         }
 
         return res;
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timer);
-        lastErr = err as Error;
-
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        // AbortError or network errors etc.
+        this.log.warn({
+          action: "llm.retry",
+          path,
+          url,
+          jobId,
+          attempt,
+          maxRetries: this.maxRetries,
+          err: lastErr ? String(lastErr.message ?? lastErr) : "Unknown error",
+        });
         if (attempt === this.maxRetries) break;
+        // Simple exponential backoff: 300ms, 600ms, 1200ms, ...
         await sleep(300 * Math.pow(2, attempt));
         attempt++;
       }
     }
 
     this.log.error({
-      action: "llm.error",
+      action: "llm.error.final",
       path,
       url,
       jobId,
       baseUrl: this.baseUrl,
-      err: String((lastErr as Error)?.message ?? lastErr),
+      err: String(lastErr?.message ?? lastErr),
     });
-    throw lastErr;
+    throw lastErr ?? new Error("Unknown error");
   }
 }
