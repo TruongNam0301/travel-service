@@ -12,13 +12,11 @@ async function bootstrap() {
   try {
     // Create NestJS application
     const app = await NestFactory.create(AppModule, {
-      bufferLogs: true, // Buffer logs until logger is ready
+      bufferLogs: true,
     });
 
-    // Use Pino logger
     app.useLogger(app.get(PinoLogger));
 
-    // Request body size limit (12kb to enforce 10k content rule)
     app.use(json({ limit: "12kb" }));
 
     // Get ConfigService
@@ -30,29 +28,22 @@ async function bootstrap() {
       .split(",")
       .map((origin) => origin.trim());
 
-    // Security: Helmet for HTTP headers
     app.use(helmet());
-
-    // CORS configuration
 
     app.enableCors({
       origin: (
         origin: string | undefined,
         callback: (err: Error | null, allow?: boolean) => void,
       ) => {
-        // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) {
           callback(null, true);
           return;
         }
 
-        // In development, allow all origins
         if (nodeEnv === "development") {
           callback(null, true);
           return;
         }
-
-        // In production, check whitelist
 
         if (corsOrigins.includes(origin)) {
           callback(null, true);

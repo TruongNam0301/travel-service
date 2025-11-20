@@ -1,16 +1,16 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PlansService } from "../plans.service";
-import { JobsService } from "../jobs.service";
-import { MemoryCompressionService } from "../memory-compression.service";
-import {
-  PlanContext,
-  PlanContextOptions,
-  ContextBuilderError,
-} from "../../shared/types/context-builder.type";
-import { estimateTokens } from "../../shared/utils/token.util";
 import { ContextBuilderConfig } from "../../config/context-builder.config";
 import { Job } from "../../entities/job.entity";
+import {
+  ContextBuilderError,
+  PlanContext,
+  PlanContextOptions,
+} from "../../shared/types/context-builder.type";
+import { estimateTokens } from "../../shared/utils/token.util";
+import { JobsService } from "../jobs.service";
+import { MemoryCompressionService } from "../memory-compression.service";
+import { PlansService } from "../plans.service";
 
 @Injectable()
 export class PlanContextBuilder {
@@ -18,8 +18,11 @@ export class PlanContextBuilder {
   private readonly config: ContextBuilderConfig;
 
   constructor(
+    @Inject(forwardRef(() => PlansService))
     private readonly plansService: PlansService,
+    @Inject(forwardRef(() => JobsService))
     private readonly jobsService: JobsService,
+    @Inject(forwardRef(() => MemoryCompressionService))
     private readonly memoryCompressionService: MemoryCompressionService,
     private readonly configService: ConfigService,
   ) {
@@ -40,16 +43,7 @@ export class PlanContextBuilder {
     const includeEmbeddingsSummary = options.includeEmbeddingsSummary ?? true;
     const maxTokens = options.maxTokens;
 
-    this.logger.log({
-      action: "plan_context.build.start",
-      planId,
-      includeMetadata,
-      includeJobs,
-      includeEmbeddingsSummary,
-    });
-
     try {
-      // Fetch plan (will throw if not found)
       const plan = await this.plansService.findOneById(planId);
       if (!plan) {
         throw new ContextBuilderError(
@@ -62,34 +56,13 @@ export class PlanContextBuilder {
       // Fetch data in parallel
       const [recentJobs, embeddingsSummary] = await Promise.all([
         includeJobs
-          ? this.getRecentJobs(planId, jobLimit).catch((err) => {
-              this.logger.warn({
-                action: "plan_context.get_jobs_failed",
-                planId,
-                error: err instanceof Error ? err.message : "Unknown error",
-              });
-              return [] as Job[];
+          ? this.getRecentJobs(planId, jobLimit).catch(() => {
+              return [];
             })
-          : Promise.resolve([] as Job[]),
+          : Promise.resolve([]),
         includeEmbeddingsSummary
-          ? this.getEmbeddingsSummary(planId).catch((err) => {
-              this.logger.warn({
-                action: "plan_context.get_embeddings_summary_failed",
-                planId,
-                error: err instanceof Error ? err.message : "Unknown error",
-              });
-              return undefined as
-                | {
-                    total: number;
-                    active: number;
-                    archived: number;
-                    lastCompression?: {
-                      mode: string;
-                      ratio: number;
-                      timestamp: Date;
-                    };
-                  }
-                | undefined;
+          ? this.getEmbeddingsSummary(planId).catch(() => {
+              return undefined;
             })
           : Promise.resolve(undefined),
       ]);
@@ -192,11 +165,7 @@ export class PlanContextBuilder {
    * Get recent completed jobs for a plan
    */
   private async getRecentJobs(planId: string, limit: number): Promise<Job[]> {
-    const jobs: Job[] = await this.jobsService.getRecentJobsInternal(
-      planId,
-      limit,
-    );
-    return jobs;
+    return await this.jobsService.getRecentJobsInternal(planId, limit);
   }
 
   /**

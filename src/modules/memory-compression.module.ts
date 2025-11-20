@@ -14,7 +14,7 @@ import { JobsModule } from "./jobs.module";
 @Module({
   imports: [
     TypeOrmModule.forFeature([Embedding, Plan, Conversation, Job]),
-    PlansModule,
+    forwardRef(() => PlansModule),
     EmbeddingsModule,
     LlmModule,
     forwardRef(() => JobsModule),

@@ -49,17 +49,6 @@ export class FinalContextComposer {
       includePlan = true,
     } = options;
 
-    this.logger.log({
-      action: "final_context.compose.start",
-      planId,
-      conversationId,
-      hasQuery: !!query,
-      maxTokens,
-      includeConversation,
-      includeEmbeddings,
-      includePlan,
-    });
-
     try {
       // Calculate token budget allocation
       const budget = calculateTokenBudget(maxTokens, priorities);

@@ -37,34 +37,21 @@ export class ChatService {
     conversationId: string,
     userMessage: string,
   ): Promise<ChatResponse> {
-    this.logger.log({
-      action: "chat.send_message.start",
-      userId,
-      conversationId,
-      messageLength: userMessage.length,
-    });
-
-    // Get conversation to access planId
     const conversation = await this.conversationsService.findOne(
       conversationId,
       userId,
     );
 
-    // Create user message
     const userMsg = await this.messagesService.create(userId, conversationId, {
       content: userMessage,
     });
 
-    // Build context using context builders
     let contextPrefix = "";
     try {
       const finalContext = await this.finalContextComposer.composeContext({
         planId: conversation.planId,
         conversationId,
-        query: userMessage, // Use user message as query for embedding search
-        includeConversation: true,
-        includeEmbeddings: true,
-        includePlan: true,
+        query: userMessage,
       });
 
       if (finalContext.formatted) {
@@ -76,7 +63,6 @@ export class ChatService {
         });
       }
     } catch (error) {
-      // Log but continue - we'll still generate a response
       this.logger.warn({
         action: "chat.context_build_failed",
         conversationId,
@@ -129,6 +115,12 @@ export class ChatService {
       assistantResponse,
     );
 
+    // Refresh conversation to get updated metadata (messageCount, lastMessageAt)
+    const updatedConversation = await this.conversationsService.findOne(
+      conversationId,
+      userId,
+    );
+
     this.logger.log({
       action: "chat.send_message.complete",
       userId,
@@ -139,7 +131,7 @@ export class ChatService {
 
     return {
       message: assistantMsg,
-      conversation,
+      conversation: updatedConversation,
       usage,
     };
   }

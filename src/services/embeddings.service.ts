@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
@@ -54,6 +55,7 @@ export class EmbeddingsService {
     private readonly dataSource: DataSource,
     @InjectRepository(Embedding)
     private readonly embeddingsRepo: Repository<Embedding>,
+    @Inject(forwardRef(() => PlansService))
     private readonly plansService: PlansService,
     @Inject(LLM_CLIENT)
     private readonly llmClient: LlmClient,

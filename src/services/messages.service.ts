@@ -1,17 +1,11 @@
-import {
-  Injectable,
-  BadRequestException,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from "@nestjs/common";
+import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Message, MessageRole } from "../entities/message.entity";
-import { Conversation } from "../entities/conversation.entity";
+import { PaginatedResponse } from "../common/dto/paginated-response.dto";
 import { CreateMessageDto } from "../dto/messages/create-message.dto";
 import { QueryMessagesDto } from "../dto/messages/query-messages.dto";
-import { PaginatedResponse } from "../common/dto/paginated-response.dto";
+import { Conversation } from "../entities/conversation.entity";
+import { Message, MessageRole } from "../entities/message.entity";
 import { ConversationsService } from "./conversations.service";
 
 @Injectable()
@@ -23,6 +17,7 @@ export class MessagesService {
     private readonly messagesRepository: Repository<Message>,
     @InjectRepository(Conversation)
     private readonly conversationsRepository: Repository<Conversation>,
+    @Inject(forwardRef(() => ConversationsService))
     private readonly conversationsService: ConversationsService,
   ) {}
 
@@ -34,59 +29,20 @@ export class MessagesService {
     conversationId: string,
     dto: CreateMessageDto,
   ): Promise<Message> {
-    // Check raw content length first (before any processing)
-    if (dto.content && dto.content.length > 10000) {
-      throw new HttpException(
-        "Payload Too Large: Message content cannot exceed 10,000 characters",
-        HttpStatus.PAYLOAD_TOO_LARGE,
-      );
-    }
-
-    // Normalize whitespace
-    const normalizedContent = dto.content.replace(/\s+/g, " ").trim();
-
-    // Reject if empty after normalization
-    if (!normalizedContent || normalizedContent.length === 0) {
-      throw new BadRequestException("Message cannot be empty");
-    }
-
-    // Verify conversation ownership (will throw 404 if unauthorized)
-    const conversation = await this.conversationsService.findOne(
-      conversationId,
-      userId,
-    );
-
-    this.logger.log({
-      action: "create_message",
-      userId,
-      conversationId,
-      planId: conversation.planId,
-      contentLength: normalizedContent.length,
-    });
-
     const message = this.messagesRepository.create({
       conversationId,
       role: MessageRole.USER,
-      content: normalizedContent,
+      content: dto.content.replace(/\s+/g, " ").trim(),
       createdBy: userId,
       isDeleted: false,
     });
 
     const savedMessage = await this.messagesRepository.save(message);
 
-    // Update conversation metadata
     await this.conversationsService.updateMessageMetadata(
       conversationId,
       savedMessage.createdAt,
     );
-
-    this.logger.log({
-      action: "message_created",
-      userId,
-      conversationId,
-      planId: conversation.planId,
-      messageId: savedMessage.id,
-    });
 
     return savedMessage;
   }
@@ -157,15 +113,17 @@ export class MessagesService {
     conversationId: string,
     limit: number,
   ): Promise<Message[]> {
-    const queryBuilder = this.messagesRepository
-      .createQueryBuilder("m")
-      .where("m.conversation_id = :conversationId", { conversationId })
-      .andWhere("m.is_deleted = false")
-      .orderBy("m.created_at", "DESC")
-      .addOrderBy("m.id", "ASC") // Stable sort
-      .take(limit);
-
-    return await queryBuilder.getMany();
+    return await this.messagesRepository.find({
+      where: {
+        conversationId,
+        isDeleted: false,
+      },
+      order: {
+        createdAt: "DESC",
+        id: "ASC",
+      },
+      take: limit,
+    });
   }
 
   /**

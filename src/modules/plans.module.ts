@@ -10,7 +10,7 @@ import { MemoryCompressionModule } from "./memory-compression.module";
   imports: [
     TypeOrmModule.forFeature([Plan]),
     forwardRef(() => ConversationsModule),
-    MemoryCompressionModule,
+    forwardRef(() => MemoryCompressionModule),
   ],
   controllers: [PlansController],
   providers: [PlansService],

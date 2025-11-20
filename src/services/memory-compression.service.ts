@@ -3,6 +3,7 @@ import {
   Logger,
   Inject,
   BadRequestException,
+  forwardRef,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -48,6 +49,7 @@ export class MemoryCompressionService {
     private readonly jobsRepo: Repository<Job>,
     @InjectRepository(Conversation)
     private readonly conversationsRepo: Repository<Conversation>,
+    @Inject(forwardRef(() => PlansService))
     private readonly plansService: PlansService,
     private readonly configService: ConfigService,
 
@@ -992,19 +994,7 @@ Provide a concise summary that captures the essential information:`;
       },
     });
 
-    let lastCompression:
-      | {
-          mode: MemoryCompressionMode;
-          beforeCount: number;
-          afterCount: number;
-          compressionRatio: number;
-          duplicatesRemoved?: number;
-          clustersMerged?: number;
-          embeddingsArchived?: number;
-          durationMs: number;
-          timestamp: Date;
-        }
-      | undefined;
+    let lastCompression: MemoryStats["lastCompression"] = undefined;
 
     if (lastCompressionJob?.result) {
       const result = lastCompressionJob.result as unknown as {

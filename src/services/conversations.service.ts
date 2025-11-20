@@ -275,11 +275,6 @@ export class ConversationsService {
     conversationId: string,
     lastMessageAt: Date,
   ): Promise<void> {
-    this.logger.log({
-      action: "update_message_metadata",
-      conversationId,
-    });
-
     await this.conversationsRepository
       .createQueryBuilder()
       .update(Conversation)

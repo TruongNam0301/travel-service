@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { Job } from "../entities/job.entity";
 import { Plan } from "../entities/plan.entity";
@@ -16,11 +16,11 @@ import { ContextBuildersModule } from "./context-builders.module";
 @Module({
   imports: [
     TypeOrmModule.forFeature([Job, Plan]),
-    PlansModule,
+    forwardRef(() => PlansModule),
     QueueModule,
     LlmModule,
     PromptTemplatesModule,
-    MemoryCompressionModule,
+    forwardRef(() => MemoryCompressionModule),
     ContextBuildersModule,
   ],
   controllers: [JobsController],

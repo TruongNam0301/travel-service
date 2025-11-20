@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConversationContextBuilder } from "../services/context-builders/conversation-context-builder.service";
 import { PlanContextBuilder } from "../services/context-builders/plan-context-builder.service";
 import { EmbeddingContextBuilder } from "../services/context-builders/embedding-context-builder.service";
@@ -12,12 +12,12 @@ import { MemoryCompressionModule } from "./memory-compression.module";
 
 @Module({
   imports: [
-    MessagesModule,
-    PlansModule,
-    JobsModule,
-    EmbeddingsModule,
+    forwardRef(() => MessagesModule),
+    forwardRef(() => PlansModule),
+    forwardRef(() => JobsModule),
+    forwardRef(() => EmbeddingsModule),
     LlmModule,
-    MemoryCompressionModule,
+    forwardRef(() => MemoryCompressionModule),
   ],
   providers: [
     ConversationContextBuilder,

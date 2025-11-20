@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Inject, forwardRef } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { EmbeddingsService } from "../embeddings.service";
 import {
@@ -18,6 +18,7 @@ export class EmbeddingContextBuilder {
   private readonly config: ContextBuilderConfig;
 
   constructor(
+    @Inject(forwardRef(() => EmbeddingsService))
     private readonly embeddingsService: EmbeddingsService,
     private readonly configService: ConfigService,
   ) {

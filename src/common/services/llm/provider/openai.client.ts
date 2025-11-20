@@ -122,12 +122,16 @@ export class OpenAiClient implements LlmClient {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+      console.log("url", url);
+
       try {
         const res = await fetch(url, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
             "Content-Type": "application/json",
+            "OpenAI-Project": "proj_d6ISs06aV4ijmXphtvQgTxBH",
+            "OpenAI-Organization": "org-GjAXjynRDHDxMG7NW0adqpf0",
           },
           body: JSON.stringify(body),
           signal: controller.signal,

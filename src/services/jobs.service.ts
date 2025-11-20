@@ -1,22 +1,23 @@
+import { InjectQueue } from "@nestjs/bullmq";
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
+  Inject,
+  Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { InjectQueue } from "@nestjs/bullmq";
-import { Repository, FindOptionsWhere } from "typeorm";
 import { Queue } from "bullmq";
-import { Job, JobState } from "../entities/job.entity";
-import { Plan } from "../entities/plan.entity";
-import { CreateJobDto } from "../dto/jobs/create-job.dto";
-import { UpdateJobDto } from "../dto/jobs/update-job.dto";
-import { QueryJobsDto } from "../dto/jobs/query-jobs.dto";
-import { PlansService } from "./plans.service";
-import { JobTypesService } from "./job-types.service";
+import { FindOptionsWhere, Repository } from "typeorm";
 import { PaginatedResponse } from "../common/dto/paginated-response.dto";
+import { CreateJobDto } from "../dto/jobs/create-job.dto";
+import { QueryJobsDto } from "../dto/jobs/query-jobs.dto";
+import { UpdateJobDto } from "../dto/jobs/update-job.dto";
+import { Job, JobState } from "../entities/job.entity";
+import { JobTypesService } from "./job-types.service";
+import { PlansService } from "./plans.service";
 
 interface JobStateUpdate {
   state?: JobState;
@@ -35,10 +36,9 @@ export class JobsService {
   constructor(
     @InjectRepository(Job)
     private readonly jobsRepository: Repository<Job>,
-    @InjectRepository(Plan)
-    private readonly plansRepository: Repository<Plan>,
     @InjectQueue("research-jobs")
     private readonly researchQueue: Queue,
+    @Inject(forwardRef(() => PlansService))
     private readonly plansService: PlansService,
     private readonly jobTypesService: JobTypesService,
   ) {}
