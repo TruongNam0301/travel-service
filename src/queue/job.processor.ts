@@ -1,5 +1,5 @@
 import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
-import { Inject, Logger, forwardRef } from "@nestjs/common";
+import { Inject, Logger, forwardRef, Optional } from "@nestjs/common";
 import { Job } from "bullmq";
 import * as llmClient_1 from "src/common/services/llm/llm.client";
 import { LlmConfig } from "../common/services/llm/llm.config";
@@ -14,6 +14,10 @@ import {
 import { MemoryCompressionService } from "../services/memory-compression.service";
 import { CompressionResult } from "../shared/types/memory-compression.type";
 import { FinalContextComposer } from "../services/context-builders/final-context-composer.service";
+import { RegionService } from "../services/region.service";
+import { EmbeddingsGlobalService } from "../services/embeddings-global.service";
+import { GridCrawlService } from "../services/grid-crawl.service";
+import { EmbeddingGlobal } from "../entities/embedding-global.entity";
 
 /**
  * Research Jobs Processor
@@ -35,6 +39,13 @@ export class JobProcessor extends WorkerHost {
     private readonly finalContextComposer: FinalContextComposer,
     @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
+    // Google Maps integration services (optional - graceful degradation if not available)
+    @Optional()
+    private readonly regionService?: RegionService,
+    @Optional()
+    private readonly embeddingsGlobalService?: EmbeddingsGlobalService,
+    @Optional()
+    private readonly gridCrawlService?: GridCrawlService,
   ) {
     super();
   }
@@ -348,6 +359,258 @@ export class JobProcessor extends WorkerHost {
       (params.destination as string) || (params.city as string);
     // Extract location (smaller sub-area) separately
     const location = params.location as string | undefined;
+    const minRating =
+      (params.minRating as number) || (params.reviewScore as number);
+    const limit = (params.limit as number) || 10;
+
+    if (!destination) {
+      throw new Error(
+        "Missing required parameter: destination or city must be provided",
+      );
+    }
+
+    this.logger.log({
+      action: "research_hotel.start",
+      destination,
+      location,
+      minRating,
+      limit,
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HYBRID APPROACH: Check global embeddings first, then crawl if needed
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Check if Google Maps services are available
+    if (
+      this.regionService &&
+      this.embeddingsGlobalService &&
+      this.gridCrawlService
+    ) {
+      try {
+        return await this.processResearchHotelWithGoogleMaps(
+          destination,
+          location,
+          minRating,
+          limit,
+          params,
+        );
+      } catch (error) {
+        this.logger.warn({
+          action: "research_hotel.google_maps_failed_fallback_to_llm",
+          destination,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        // Fall through to LLM-only approach
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FALLBACK: LLM-only approach (original behavior)
+    // ─────────────────────────────────────────────────────────────────────────
+    return await this.processResearchHotelWithLLM(params);
+  }
+
+  /**
+   * Process hotel research using Google Maps data (hybrid approach)
+   */
+  private async processResearchHotelWithGoogleMaps(
+    destination: string,
+    _location: string | undefined,
+    minRating: number | undefined,
+    limit: number,
+    params: Record<string, unknown>,
+  ): Promise<JobResult> {
+    const regionId = this.regionService!.normalizeRegionId(destination);
+
+    this.logger.log({
+      action: "research_hotel.check_global_data",
+      destination,
+      regionId,
+    });
+
+    // Step 1: Check if we have data for this region
+    const regionCheck = await this.regionService!.checkRegionData(
+      destination,
+      "lodging",
+      50, // Minimum 50 hotels to consider data sufficient
+    );
+
+    let dataSource: "google_maps" | "google_maps+crawl" | "llm_only" =
+      "google_maps";
+
+    // Step 2: If no data or stale, trigger crawl
+    if (regionCheck.needsCrawl) {
+      this.logger.log({
+        action: "research_hotel.trigger_crawl",
+        regionId,
+        reason: regionCheck.reason,
+      });
+
+      dataSource = "google_maps+crawl";
+
+      // Crawl the region for lodging
+      const crawlResult = await this.gridCrawlService!.crawlRegion(
+        destination,
+        "lodging",
+      );
+
+      if (crawlResult.errors.length > 0 && crawlResult.places.length === 0) {
+        // Crawl completely failed, fall back to LLM
+        throw new Error(`Crawl failed: ${crawlResult.errors.join(", ")}`);
+      }
+
+      this.logger.log({
+        action: "research_hotel.crawl_complete",
+        regionId,
+        placesFound: crawlResult.places.length,
+        apiCalls: crawlResult.totalApiCalls,
+        duration: crawlResult.duration,
+      });
+    }
+
+    // Step 3: Query stored data with filters
+    const filters = {
+      minRating,
+    };
+
+    const hotels = await this.embeddingsGlobalService!.searchByRegion(
+      regionId,
+      "lodging",
+      filters,
+      limit,
+    );
+
+    this.logger.log({
+      action: "research_hotel.query_complete",
+      regionId,
+      hotelsFound: hotels.length,
+      dataSource,
+    });
+
+    // Step 4: Format results
+    const formattedHotels = hotels.map((h) => this.formatHotelResult(h));
+
+    // Step 5: Optional LLM enrichment for recommendations
+    let summary = `Found ${hotels.length} hotel${hotels.length !== 1 ? "s" : ""} in ${destination}`;
+    let tokensUsed = 0;
+
+    if (hotels.length > 0 && params.query) {
+      // Use LLM to generate a natural language summary
+      try {
+        const enrichmentResult = await this.enrichHotelResultsWithLLM(
+          formattedHotels,
+          params.query as string,
+          params,
+        );
+        summary = enrichmentResult.summary;
+        tokensUsed = enrichmentResult.tokensUsed;
+      } catch (error) {
+        this.logger.warn({
+          action: "research_hotel.llm_enrichment_failed",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    return {
+      success: true,
+      jobType: "research_hotel",
+      data: {
+        hotels: formattedHotels,
+        regionId,
+        dataSource,
+      },
+      summary,
+      meta: {
+        createdAt: new Date().toISOString(),
+        model: "google_maps",
+        tokensUsed,
+        dataSource,
+      },
+    };
+  }
+
+  /**
+   * Format EmbeddingGlobal to hotel result structure
+   */
+  private formatHotelResult(hotel: EmbeddingGlobal): Record<string, unknown> {
+    return {
+      name: hotel.name,
+      rating: hotel.rating,
+      totalReviews: hotel.totalRatings,
+      priceLevel:
+        hotel.priceLevel !== undefined
+          ? "$".repeat(hotel.priceLevel + 1)
+          : undefined,
+      address: hotel.address,
+      location: {
+        lat: Number(hotel.lat),
+        lng: Number(hotel.lng),
+      },
+      googleMapsUrl: hotel.rawData.url,
+      photos: hotel.photos?.slice(0, 3).map((p) => ({
+        reference: p.photoReference,
+        width: p.width,
+        height: p.height,
+      })),
+      types: hotel.types,
+      openNow: hotel.openingHours?.openNow,
+      website: hotel.website,
+      phoneNumber: hotel.phoneNumber,
+      placeId: hotel.placeId,
+    };
+  }
+
+  /**
+   * Use LLM to enrich hotel results with natural language summary
+   */
+  private async enrichHotelResultsWithLLM(
+    hotels: Record<string, unknown>[],
+    userQuery: string,
+    params: Record<string, unknown>,
+  ): Promise<{ summary: string; tokensUsed: number }> {
+    const hotelSummary = hotels
+      .slice(0, 5)
+      .map((h, i) => {
+        const name = typeof h.name === "string" ? h.name : "Unknown";
+        const rating =
+          typeof h.rating === "number" ? h.rating.toString() : "N/A";
+        const address = typeof h.address === "string" ? h.address : "";
+        return `${i + 1}. ${name} (${rating}★, ${address})`;
+      })
+      .join("\n");
+
+    const prompt = `Based on the user's request: "${userQuery}"
+
+Here are the top hotels found:
+${hotelSummary}
+
+Write a brief, helpful summary (2-3 sentences) recommending these hotels to the user. Be friendly and mention key highlights.`;
+
+    const model = this.resolveModelForJob("research_hotel");
+    const { text, usage } = await this.llmClient.generate(prompt, {
+      jobId: params.jobId as string,
+      temperature: 0.5,
+      maxTokens: 200,
+      model,
+    });
+
+    return {
+      summary: text.trim(),
+      tokensUsed: usage?.total ?? 0,
+    };
+  }
+
+  /**
+   * Original LLM-only hotel research (fallback)
+   */
+  private async processResearchHotelWithLLM(
+    params: Record<string, unknown>,
+  ): Promise<JobResult> {
+    const destination =
+      (params.destination as string) || (params.city as string);
+    const location = params.location as string | undefined;
     const nights = params.nights as number;
     const locationDetails = params.locationDetails as string;
     const budget = params.budget as string;
@@ -358,14 +621,6 @@ export class JobProcessor extends WorkerHost {
     const currency = params.currency as string;
     const minRating = params.minRating as number;
     const guests = params.guests as number;
-
-    if (!destination) {
-      throw new Error(
-        "Missing required parameter: destination or city must be provided",
-      );
-    }
-
-    this.logger.log("Processing research_hotel job with params:", params);
 
     // Build location text (smaller sub-area)
     const locationText = location ? ` in ${location}` : "";
@@ -431,6 +686,7 @@ Return ONLY valid JSON with this exact structure: {
       maxTokens: 2000,
       model,
     });
+
     // Parse JSON safely
     let parsedData: Record<string, unknown>;
     try {
@@ -458,12 +714,16 @@ Return ONLY valid JSON with this exact structure: {
     return {
       success: true,
       jobType: "research_hotel",
-      data: parsedData,
+      data: {
+        ...parsedData,
+        dataSource: "llm_only",
+      },
       summary,
       meta: {
         createdAt: new Date().toISOString(),
         model: responseModel ?? "unknown",
         tokensUsed: usage?.total ?? 0,
+        dataSource: "llm_only",
       },
     };
   }

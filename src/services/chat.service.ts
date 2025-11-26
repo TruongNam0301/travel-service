@@ -71,13 +71,6 @@ export class ChatService {
     const { intent, jobType } =
       await this.intentDetection.classify(userMessage);
 
-    this.logger.log({
-      action: "chat.intent_detected",
-      conversationId,
-      intent,
-      jobType,
-    });
-
     // 2) If job requested → trigger job automatically
     if (intent === "job_request" && jobType) {
       try {
@@ -114,13 +107,6 @@ export class ChatService {
           userId,
         );
 
-        this.logger.log({
-          action: "chat.job_triggered",
-          conversationId,
-          jobId: job.id,
-          jobType,
-        });
-
         return {
           message: assistantMsg,
           conversation: updatedConversation,
@@ -135,7 +121,6 @@ export class ChatService {
           error: error instanceof Error ? error.message : "Unknown error",
           stack: error instanceof Error ? error.stack : undefined,
         });
-        // Continue with normal chat flow below
       }
     }
 
@@ -161,11 +146,6 @@ export class ChatService {
 
       if (finalContext.formatted) {
         contextPrefix = finalContext.formatted + "\n\n";
-        this.logger.log({
-          action: "chat.context_built",
-          conversationId,
-          contextTokens: finalContext.tokenCount,
-        });
       }
     } catch (error) {
       this.logger.warn({

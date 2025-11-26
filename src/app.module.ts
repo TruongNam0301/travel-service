@@ -17,6 +17,7 @@ import { PromptTemplatesModule } from "./modules/prompt-templates.module";
 import { EmbeddingsModule } from "./modules/embeddings.module";
 import { MemoryCompressionModule } from "./modules/memory-compression.module";
 import { ContextBuildersModule } from "./modules/context-builders.module";
+import { GoogleMapsModule } from "./modules/google-maps.module";
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ContextBuildersModule } from "./modules/context-builders.module";
     EmbeddingsModule,
     MemoryCompressionModule,
     ContextBuildersModule,
+    GoogleMapsModule,
   ],
   providers: [
     // Global exception filter

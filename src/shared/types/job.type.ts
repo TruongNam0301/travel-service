@@ -36,5 +36,6 @@ export interface JobResult {
     createdAt: string;
     model: string;
     tokensUsed: number;
+    dataSource?: "google_maps" | "google_maps+crawl" | "llm_only";
   };
 }

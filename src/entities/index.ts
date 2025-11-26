@@ -8,3 +8,5 @@ export * from "./prompt-template.entity";
 export * from "./conversation.entity";
 export * from "./message.entity";
 export * from "./embedding.entity";
+export * from "./embedding-global.entity";
+export * from "./region.entity";

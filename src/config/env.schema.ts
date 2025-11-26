@@ -89,29 +89,14 @@ export const envSchema = z.object({
   VECTOR_HNSW_M: z.coerce.number().default(16),
   VECTOR_HNSW_EF_CONSTRUCTION: z.coerce.number().default(64),
 
-  // Memory Compression
-  MEMORY_COMPRESSION_ENABLED: z.coerce.boolean().default(true),
-  MEMORY_COMPRESSION_INTERVAL: z.string().default("0 2 * * *"), // Daily at 2 AM
-  MEMORY_ARCHIVE_THRESHOLD: z.coerce.number().default(1000), // Trigger compression when embeddings > threshold
-  MEMORY_COMPRESSION_DEFAULT_MODE: z.enum(["light", "full"]).default("light"),
-  MEMORY_COMPRESSION_SIMILARITY: z.coerce.number().min(0).max(1).optional(),
-  MEMORY_RETENTION_DAYS: z.coerce.number().min(1).optional(),
-  MEMORY_INACTIVE_PLAN_DAYS: z.coerce.number().default(30), // Days of inactivity before compression
-  MEMORY_COMPRESSION_MIN_EMBEDDINGS_THRESHOLD: z.coerce.number().default(50), // Minimum embeddings before compression runs
-  MEMORY_COMPRESSION_PRESERVE_RECENT_COUNT: z.coerce.number().default(20), // Number of recent embeddings to preserve
-  MEMORY_COMPRESSION_ACTIVE_CONVERSATION_DAYS: z.coerce.number().default(7), // Days to consider conversation active
-
-  // Context Builders
-  CONTEXT_BUILDER_MAX_TOKENS: z.coerce.number().default(8000),
-  CONTEXT_BUILDER_MESSAGE_LIMIT: z.coerce.number().default(20),
-  CONTEXT_BUILDER_EMBEDDING_TOP_K: z.coerce.number().default(10),
-  CONTEXT_BUILDER_EMBEDDING_THRESHOLD: z.coerce
-    .number()
-    .min(0)
-    .max(1)
-    .default(0.7),
-  CONTEXT_BUILDER_JOB_LIMIT: z.coerce.number().default(5),
-  CONTEXT_BUILDER_LONG_MESSAGE_THRESHOLD: z.coerce.number().default(500),
+  // Google Maps API (optional - for real data crawling)
+  GOOGLE_MAPS_API_KEY: z.string().optional(),
+  GOOGLE_MAPS_CACHE_TTL: z.coerce.number().default(3600), // 1 hour
+  GOOGLE_MAPS_GRID_RADIUS_KM: z.coerce.number().default(20), // 20km search radius
+  GOOGLE_MAPS_CELL_SIZE_KM: z.coerce.number().default(3), // 3km grid cells
+  GOOGLE_MAPS_STALE_DAYS: z.coerce.number().default(30), // Re-crawl after 30 days
+  GOOGLE_MAPS_QPS: z.coerce.number().default(10), // Queries per second
+  GOOGLE_MAPS_DEFAULT_LANGUAGE: z.string().default("vi"), // Vietnamese
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

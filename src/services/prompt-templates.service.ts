@@ -5,9 +5,6 @@ import * as Handlebars from "handlebars";
 import { PromptTemplate } from "../entities/prompt-template.entity";
 import { JobType } from "../entities/job-type.entity";
 
-/**
- * Custom error class for prompt template rendering errors
- */
 export class PromptTemplateError extends Error {
   constructor(
     message: string,
@@ -126,15 +123,6 @@ export class PromptTemplatesService {
       }
     }
 
-    // Log successful template load
-    this.logger.log({
-      action: "template_loaded",
-      templateId: template.id,
-      jobType: template.jobType?.name,
-      version: template.version,
-      lookupMethod,
-    });
-
     // Compile and render the template
     try {
       const compiledTemplate = this.handlebars.compile(template.template, {
@@ -159,15 +147,6 @@ export class PromptTemplatesService {
         template.jobType?.name,
         error instanceof Error ? error : undefined,
       );
-
-      this.logger.error({
-        action: "template_render_failed",
-        templateId: template.id,
-        jobType: template.jobType?.name,
-        error: templateError.message,
-        originalError: error instanceof Error ? error.message : String(error),
-        template: template.template.substring(0, 200), // Log first 200 chars
-      });
 
       throw templateError;
     }

@@ -1,13 +1,13 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { Inject } from "@nestjs/common";
+import { Injectable, Logger, Inject } from "@nestjs/common";
 import { LLM_CLIENT } from "../common/services/llm/llm.client";
 import type { LlmClient } from "../common/services/llm/llm.client";
 import { INTENT_CLASSIFIER_PROMPT } from "../prompts/intent-classifier.prompt";
-
-export type DetectedIntent = {
-  intent: "default" | "planning" | "summarization" | "job_request";
-  jobType: string | null;
-};
+import {
+  DetectedIntentSchema,
+  DEFAULT_INTENT,
+  CONFIDENCE_THRESHOLD,
+  type DetectedIntent,
+} from "../schemas/intent.schema";
 
 @Injectable()
 export class IntentDetectionService {
@@ -18,52 +18,47 @@ export class IntentDetectionService {
     private readonly llmClient: LlmClient,
   ) {}
 
+  /**
+   * Classify user message intent using LLM
+   */
   async classify(message: string): Promise<DetectedIntent> {
-    const prompt = `
-${INTENT_CLASSIFIER_PROMPT}
+    const prompt = `${INTENT_CLASSIFIER_PROMPT}
 
 User message:
 
 "${message}"
-
 `;
 
     try {
       const result = await this.llmClient.generate(prompt, {
-        model: "gpt-4o-mini", // cheap, fast
+        model: "gpt-4o-mini",
         temperature: 0,
         maxTokens: 128,
       });
 
-      const parsed = JSON.parse(result.text.trim()) as DetectedIntent;
+      const parsed = this.parseResponse(result.text);
 
-      // Validate intent
-      if (
-        !["default", "planning", "summarization", "job_request"].includes(
-          parsed.intent,
-        )
-      ) {
+      if (!parsed) {
         this.logger.warn({
-          action: "intent.invalid_intent",
-          receivedIntent: parsed.intent,
+          action: "intent.parse_failed",
           message: message.substring(0, 50),
+          rawResponse: result.text.substring(0, 200),
         });
-        return { intent: "default", jobType: null };
+        return DEFAULT_INTENT;
       }
 
-      // Validate jobType if intent is job_request
-      if (parsed.intent === "job_request") {
-        if (!parsed.jobType) {
-          this.logger.warn({
-            action: "intent.missing_job_type",
-            message: message.substring(0, 50),
-          });
-          return { intent: "default", jobType: null };
-        }
-      } else {
-        // Clear jobType if not job_request
-        parsed.jobType = null;
+      // Check confidence threshold
+      if (parsed.confidence < CONFIDENCE_THRESHOLD) {
+        return DEFAULT_INTENT;
       }
+
+      this.logger.debug({
+        action: "intent.classified",
+        message: message.substring(0, 50),
+        intent: parsed.intent,
+        jobType: parsed.jobType,
+        confidence: parsed.confidence,
+      });
 
       return parsed;
     } catch (error) {
@@ -72,7 +67,66 @@ User message:
         error: error instanceof Error ? error.message : "Unknown error",
         message: message.substring(0, 50),
       });
-      return { intent: "default", jobType: null };
+      return DEFAULT_INTENT;
     }
   }
+
+  /**
+   * Parse and validate LLM response using Zod schema
+   */
+  private parseResponse(text: string): DetectedIntent | null {
+    const jsonString = this.extractJson(text);
+
+    if (!jsonString) {
+      return null;
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(jsonString);
+      const result = DetectedIntentSchema.safeParse(parsed);
+
+      if (result.success) {
+        return result.data;
+      }
+
+      this.logger.debug({
+        action: "intent.validation_failed",
+        errors: result.error.issues,
+        rawParsed: parsed,
+      });
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Extract JSON from response, handling markdown code blocks
+   */
+  private extractJson(text: string): string | null {
+    const trimmed = text.trim();
+
+    // Try direct JSON parse first
+    if (trimmed.startsWith("{")) {
+      return trimmed;
+    }
+
+    // Extract from markdown code block
+    const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch?.[1]) {
+      return codeBlockMatch[1].trim();
+    }
+
+    // Try to find JSON object in the text
+    const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return jsonMatch[0];
+    }
+
+    return null;
+  }
 }
+
+// Re-export type for consumers
+export type { DetectedIntent };

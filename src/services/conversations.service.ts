@@ -39,13 +39,6 @@ export class ConversationsService {
     // Verify plan ownership (throws if not owner)
     await this.plansService.verifyOwnership(planId, userId);
 
-    this.logger.log({
-      action: "create_conversation",
-      userId,
-      planId,
-      isDefault: dto.isDefault,
-    });
-
     // If setting as default, unset previous default
     if (dto.isDefault) {
       await this.unsetPreviousDefault(planId);
@@ -61,13 +54,6 @@ export class ConversationsService {
 
       const savedConversation =
         await this.conversationsRepository.save(conversation);
-
-      this.logger.log({
-        action: "conversation_created",
-        userId,
-        planId,
-        conversationId: savedConversation.id,
-      });
 
       return savedConversation;
     } catch (error: unknown) {

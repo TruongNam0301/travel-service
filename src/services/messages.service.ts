@@ -140,14 +140,6 @@ export class MessagesService {
       userId,
     );
 
-    this.logger.log({
-      action: "create_assistant_message",
-      userId,
-      conversationId,
-      planId: conversation.planId,
-      contentLength: content.length,
-    });
-
     const message = this.messagesRepository.create({
       conversationId,
       role: MessageRole.ASSISTANT,
