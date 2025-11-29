@@ -5,6 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import { Logger as PinoLogger } from "nestjs-pino";
 import { json } from "express";
+import { AppConfig } from "./config/app.config";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -19,14 +20,12 @@ async function bootstrap() {
 
     app.use(json({ limit: "12kb" }));
 
-    // Get ConfigService
+    // Get app configuration
     const configService = app.get(ConfigService);
-    const port = configService.get<number>("PORT", 3000);
-    const nodeEnv = configService.get<string>("NODE_ENV", "development");
-    const corsOrigins = configService
-      .get<string>("CORS_ORIGINS", "http://localhost:3000")
-      .split(",")
-      .map((origin) => origin.trim());
+    const appConfig = configService.get<AppConfig>("app")!;
+    const port = appConfig.port;
+    const nodeEnv = appConfig.nodeEnv;
+    const corsOrigins = appConfig.corsOrigins;
 
     app.use(helmet());
 

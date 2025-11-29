@@ -1,12 +1,24 @@
 import { registerAs } from "@nestjs/config";
 import { RedisOptions } from "ioredis";
 
+export interface RedisConfig extends RedisOptions {
+  host: string;
+  port: number;
+  password?: string;
+}
+
+export interface CacheConfig {
+  ttl: number;
+  max: number;
+  isGlobal: boolean;
+}
+
 export default registerAs(
   "redis",
-  (): RedisOptions => ({
+  (): RedisConfig => ({
     host: process.env.REDIS_HOST || "localhost",
     port: parseInt(process.env.REDIS_PORT || "6379", 10),
-    password: process.env.REDIS_PASSWORD || undefined,
+    password: process.env.REDIS_PASSWORD,
     retryStrategy: (times: number) => {
       // Reconnect after a delay
       const delay = Math.min(times * 50, 2000);
@@ -17,8 +29,10 @@ export default registerAs(
   }),
 );
 
-export const getCacheConfig = () => ({
-  ttl: 300, // 5 minutes default
-  max: 100, // maximum number of items in cache
+export const getCacheConfig = (): CacheConfig => ({
+  ttl: parseInt(process.env.CACHE_TTL || "300", 10),
+  max: parseInt(process.env.CACHE_MAX || "100", 10),
   isGlobal: true,
 });
+
+export const REDIS_CONFIG_KEY = "redis";

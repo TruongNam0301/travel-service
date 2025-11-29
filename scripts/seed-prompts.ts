@@ -1,8 +1,8 @@
 import { DataSource } from "typeorm";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { JobType } from "../src/entities/job-type.entity";
-import { PromptTemplate } from "../src/entities/prompt-template.entity";
+import { JobType } from "../src/features/jobs/entities/job-type.entity";
+import { PromptTemplate } from "../src/domain/prompt-templates/entities/prompt-template.entity";
 
 /**
  * Seed script to load Handlebars prompt templates into database

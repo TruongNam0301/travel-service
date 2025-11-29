@@ -40,40 +40,53 @@ yarn install
 
 ### 3. Environment Setup
 
-Copy the example environment file and configure it:
+The project uses environment-specific configuration files for easier setup:
+
+#### Quick Start (Development)
+
+For local development, use the minimal `.env.development` file:
 
 ```bash
-cp .env.example .env
+cp .env.development .env
 ```
 
-Edit `.env` with your configuration. Key variables:
+Edit `.env` and add your **required** secrets:
 
 ```env
-# Application
-NODE_ENV=development
-PORT=3000
-LOG_LEVEL=debug
+# Required: JWT Secrets
+JWT_SECRET=your-secret-key-change-me
+JWT_REFRESH_SECRET=your-refresh-secret-change-me
 
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=travel_db
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-# Queue
-QUEUE_CONCURRENCY=5
-
-# Security
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-RATE_LIMIT_TTL=60
-RATE_LIMIT_MAX=100
+# Required: OpenAI API Key
+OPENAI_API_KEY=sk-your-openai-key-here
+LLM_PROVIDER=openai
 ```
+
+**That's it!** All other settings use sensible defaults for development.
+
+#### Production Setup
+
+For production, copy the production template:
+
+```bash
+cp .env.production.example .env.production
+```
+
+Edit `.env.production` with your production values. See the full configuration reference below.
+
+#### Configuration Reference
+
+For all available options, see `.env.example`. The configuration is organized by domain:
+
+- **App**: Port, environment, logging
+- **Database**: PostgreSQL connection
+- **Redis**: Cache and queue backend
+- **JWT**: Authentication settings
+- **LLM**: AI provider configuration
+- **Vector**: Search engine settings
+- **Google Maps**: Optional API integration
+
+Most variables have defaults - only JWT secrets and LLM API keys are required.
 
 ## 🐳 Docker Setup
 
@@ -240,38 +253,107 @@ Husky automatically runs lint-staged on commit, which:
 
 ```
 src/
-├── config/              # Configuration files
-│   ├── env.schema.ts    # Zod environment validation
-│   ├── database.config.ts
-│   ├── redis.config.ts
-│   ├── queue.config.ts
-│   ├── logger.config.ts
-│   └── app.config.ts
+├── config/              # Domain-specific configuration files
+│   ├── app.config.ts           # App, CORS, rate limiting
+│   ├── database.config.ts      # PostgreSQL settings
+│   ├── redis.config.ts         # Redis & cache
+│   ├── queue.config.ts         # BullMQ configuration
+│   ├── jwt.config.ts           # JWT authentication
+│   ├── llm.config.ts           # LLM provider (OpenAI)
+│   ├── vector.config.ts        # Vector search settings
+│   ├── context-builder.config.ts  # Memory context builder
+│   ├── memory-compression.config.ts # Memory compression
+│   ├── env.schema.ts           # Zod validation
+│   └── logger.config.ts        # Logging configuration
 ├── core/                # Core infrastructure modules
-│   ├── app-core.module.ts
-│   └── cache.module.ts  # Redis cache module
-├── database/           # Database module
+│   ├── app-core.module.ts  # Loads all configs
+│   └── cache.module.ts     # Redis cache module
+├── database/            # Database module
 │   ├── database.module.ts
-│   └── migrations/     # TypeORM migrations
+│   └── migrations/      # TypeORM migrations
 ├── queue/               # BullMQ queue infrastructure
 │   ├── queue.module.ts
 │   ├── queue.service.ts
 │   ├── main.worker.ts   # Worker entrypoint
-│   └── workers/         # Job processors
-├── health/              # Health check module
-│   ├── health.module.ts
-│   └── health.controller.ts
+│   └── job.processor.ts # Job processing logic
 ├── common/              # Shared utilities
+│   ├── constants/       # Domain constants
 │   ├── decorators/
-│   ├── filters/
 │   ├── interceptors/
 │   ├── interfaces/
+│   ├── guards/
+│   ├── strategies/      # Passport strategies
+│   ├── services/        # Shared services (LLM, Google Maps)
 │   └── exceptions/      # Exception handling
-│       ├── app.exception.ts
-│       ├── http-exception.ts
-│       └── index.ts
-└── modules/             # Business modules (future)
+├── services/            # Business logic services
+│   ├── auth.service.ts
+│   ├── chat.service.ts
+│   ├── context-builders/  # Memory context builders
+│   └── ...
+├── controllers/         # API controllers
+├── entities/            # TypeORM entities
+└── modules/             # Feature modules
 ```
+
+## ⚙️ Configuration Architecture
+
+The project uses a **domain-driven configuration** approach with NestJS's `@nestjs/config`:
+
+### Configuration Files
+
+Each domain has its own config file using `registerAs()`:
+
+- **`app.config.ts`**: Application settings, CORS, rate limiting
+- **`database.config.ts`**: PostgreSQL connection and behavior
+- **`redis.config.ts`**: Redis connection and caching
+- **`jwt.config.ts`**: JWT authentication settings
+- **`llm.config.ts`**: LLM provider configuration
+- **`vector.config.ts`**: Vector search settings
+- **`queue.config.ts`**: BullMQ queue configuration
+
+### Using Configuration in Services
+
+Instead of reading `process.env` directly, inject domain configs:
+
+```typescript
+import { Inject, Injectable } from "@nestjs/common";
+import { ConfigType } from "@nestjs/config";
+import jwtConfig from "@/config/jwt.config";
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @Inject(jwtConfig.KEY)
+    private readonly jwtCfg: ConfigType<typeof jwtConfig>,
+  ) {}
+
+  generateToken() {
+    // Use typed configuration
+    const secret = this.jwtCfg.secret;
+    const expiration = this.jwtCfg.accessExpiration;
+  }
+}
+```
+
+### Benefits
+
+- **Type-safe**: Full TypeScript support for all config values
+- **Domain-organized**: Each config file is self-contained
+- **Smart defaults**: Most values have sensible defaults
+- **Environment-specific**: Automatic loading of `.env.development`, `.env.production`
+- **Easy testing**: Mock specific config namespaces
+
+### Required vs Optional
+
+**Required variables** (must be set in production):
+
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`
+- `OPENAI_API_KEY`, `LLM_PROVIDER`
+
+**Optional variables** (have defaults):
+
+- All database, Redis, and app settings
+- Port, log level, CORS origins, etc.
 
 ## 🔒 Security Features
 
@@ -391,11 +473,11 @@ All exceptions are automatically caught and formatted consistently:
 ### Usage Example
 
 ```typescript
-import { NotFoundException, ValidationException } from '@/common/exceptions';
+import { NotFoundException, ValidationException } from "@/common/exceptions";
 
 // Throw custom exceptions
-throw new NotFoundException('Plan', planId);
-throw new ValidationException('Invalid date range', { startDate, endDate });
+throw new NotFoundException("Plan", planId);
+throw new ValidationException("Invalid date range", { startDate, endDate });
 ```
 
 See `src/common/exceptions/` for more details.
